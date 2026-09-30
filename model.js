@@ -12,7 +12,8 @@ export const DEFAULTS={template:'gate',depth:600,width:1000,height:1800,frame:'4
 export const length=e=>Math.hypot(...e.a.map((v,i)=>e.b[i]-v));
 export const kgPerM=id=>{const p=PROFILES[id];return (p.w*p.h-(p.w-2*p.t)*(p.h-2*p.t))*.00785;};
 export function checkParams(raw){
-  const p={template:raw.template??'gate',depth:Number(raw.depth??600),width:Number(raw.width),height:Number(raw.height),frame:raw.frame,bar:raw.bar,gap:Number(raw.gap),infill:raw.infill!==false};
+  const p={joint:raw.joint??'butt',template:raw.template??'gate',depth:Number(raw.depth??600),width:Number(raw.width),height:Number(raw.height),frame:raw.frame,bar:raw.bar,gap:Number(raw.gap),infill:raw.infill!==false};
+  if(!['butt','miter'].includes(p.joint))throw Error('Nieznany typ połączenia.');
   if(!['gate','frame','railing','table'].includes(p.template))throw Error('Nieznany szablon konstrukcji.');
   if(!Number.isFinite(p.depth)||p.depth<300||p.depth>4000)throw Error('Głębokość: od 300 do 4000 mm.');
   if(['frame','table'].includes(p.template))p.infill=false;
@@ -28,7 +29,10 @@ export function generate(raw=DEFAULTS){
   for(const x of [f/2,W-f/2])for(const z of [f/2,p.depth-f/2])add('N'+(++n),'Noga · '+n,p.frame,[x,0,z],[x,H,z]);
   for(const [i,z] of [f/2,p.depth-f/2].entries())add('B'+(i+1),'Belka długa · '+(i+1),p.frame,[f,H-f/2,z],[W-f,H-f/2,z]);
   for(const [i,x] of [f/2,W-f/2].entries())add('B'+(i+3),'Belka poprzeczna · '+(i+1),p.frame,[x,H-f/2,f],[x,H-f/2,p.depth-f]);
-  return {version:1,name:'Stelaż stołu',params:p,custom:false,elements:parts,actualGap:0};
+  if(p.joint==='miter'){
+   for(const e of parts){if(e.id.startsWith('N')){e.b[1]=H-f/2;e.cuts.b=normalizeCut({angle:45,plane:'width',flipped:e.a[0]<W/2});}else if(['B1','B2'].includes(e.id)){e.a[0]=f/2;e.b[0]=W-f/2;e.cuts=normalizeCuts({a:{angle:45,plane:'height',flipped:true},b:{angle:45,plane:'height',flipped:false}});}}
+  }
+  return {version:1,name:'Stelaż stołu',params:p,custom:false,elements:parts,actualGap:0,...(p.joint==='miter'?{joints:[...['N1','N2','N3','N4'].map((id,i)=>({type:'miter',first:{id,end:'b'},second:{id:i%2?'B2':'B1',end:i<2?'a':'b'}}))]}:{})};
  }
  if(p.template==='railing'){
   const bottom=100;
@@ -71,7 +75,10 @@ export function validateElement(e){
  if(length(e)<1||length(e)>30000)throw Error('Długość profilu musi wynosić od 1 do 30 000 mm.');
  const cuts=normalizeCuts(e.cuts),sa=cutSlopes(cuts.a),sb=cutSlopes(cuts.b),p=PROFILES[e.profile];
  if(length(e)-Math.abs(sb[0]-sa[0])*p.w/2-Math.abs(sb[1]-sa[1])*p.h/2<1)throw Error('Płaszczyzny cięcia przecinają się. Zwiększ długość lub zmień kąty.');
- return {id:e.id,name:e.name,profile:e.profile,a:[...e.a],b:[...e.b],cuts};
+ const extra={};
+ if(e.sectionX!==undefined){if(!Array.isArray(e.sectionX)||e.sectionX.length!==3||e.sectionX.some(n=>!Number.isFinite(n)))throw Error('Niepoprawna orientacja przekroju.');const d=e.b.map((n,i)=>(n-e.a[i])/length(e)),dot=d.reduce((n,x,i)=>n+x*e.sectionX[i],0),norm=Math.hypot(...e.sectionX.map((x,i)=>x-dot*d[i]));if(norm<1e-6)throw Error('Niepoprawna orientacja przekroju.');extra.sectionX=e.sectionX.map((x,i)=>(x-dot*d[i])/norm);}
+ if(e.baseAlignment!==undefined){if(!['local','horizontal','verticalX','verticalZ'].includes(e.baseAlignment))throw Error('Niepoprawne wyrównanie końca.');extra.baseAlignment=e.baseAlignment;}
+ return {id:e.id,name:e.name,profile:e.profile,a:[...e.a],b:[...e.b],cuts,...extra};
 }
 export function validateProject(raw){
  if(!raw||raw.version!==1||typeof raw.name!=='string'||raw.name.length>80||!Array.isArray(raw.elements)||raw.elements.length>2000)throw Error('To nie jest obsługiwany plik projektu Warsztat 3D.');
@@ -79,5 +86,12 @@ export function validateProject(raw){
  if(ids.size!==elements.length)throw Error('Identyfikatory elementów muszą być unikalne.');
  const params=checkParams(raw.params);const expected=generate(params);
  const custom=JSON.stringify(expected.elements)!==JSON.stringify(elements);
- return {version:1,name:raw.name,params,custom,elements,actualGap:expected.actualGap};
+ const extra={};if(raw.joints!==undefined){if(!Array.isArray(raw.joints)||raw.joints.length>100)throw Error('Niepoprawne połączenia.');const used=new Set();extra.joints=raw.joints.map(rawJoint=>{const j=normalizeJoint(rawJoint);for(const ref of [j.first,j.second]){const key=ref.id+':'+ref.end;if(!ids.has(ref.id)||used.has(key))throw Error('Koniec profilu może należeć do jednego połączenia.');used.add(key);}if(j.first.id===j.second.id)throw Error('Wybierz dwa różne profile.');return j;});}
+ return {version:1,name:raw.name,params,custom,elements,actualGap:expected.actualGap,...extra};
+}
+
+export function normalizeJoint(j){
+ if(j?.leg)j={type:'miter',first:{id:j.leg,end:'b'},second:{id:j.beam,end:j.end}};
+ if(!j||j.type!=='miter'||![j.first,j.second].every(r=>r&&typeof r.id==='string'&&['a','b'].includes(r.end)))throw Error('Niepoprawne połączenie.');
+ return {type:'miter',first:{id:j.first.id,end:j.first.end},second:{id:j.second.id,end:j.second.end}};
 }

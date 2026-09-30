@@ -21,3 +21,16 @@
 @media(max-width:1200px){.project-heading input{width:190px}.app-header{gap:15px;padding:12px 18px}}
 @media(max-width:760px){.brand-original{width:145px;height:34px}.brand>span{font-size:12px;letter-spacing:2px}.app-header{height:119px;padding:9px 12px;gap:8px;align-content:center}.workspace{height:calc(100dvh - 119px)}.header-actions{order:1}.header-actions button{font-size:13px;padding:8px}.project-heading{order:2;flex:1 1 160px;padding:0}.project-heading input{width:100%}.module-menu{order:3}.module-menu summary{padding:7px 9px;font-size:13px}.module-menu nav{right:0}.tag{display:none}}
 @media print{.module-menu{display:none}}
+
+/* The room planner shares ROBION identity and remains a separate project type. */
+.design-modes{display:flex;gap:3px;background:#e8eef1a0;padding:4px;border:1px solid #dae3e7;border-radius:10px;flex-shrink:0}.design-modes a{padding:7px 10px;border-radius:6px;color:#627986;text-decoration:none;font-size:12px;white-space:nowrap}.design-modes a[aria-current]{background:#fff;color:#826334;box-shadow:0 1px 6px #52667513}@media(max-width:1400px){.app-header{gap:12px}.project-heading{padding-left:10px}.project-heading input{width:150px}.project-heading .tag{display:none}.design-modes a{font-size:11px;padding:7px}}@media(max-width:1000px){.app-header .project-heading{display:none}}@media(max-width:760px){.design-modes{order:2}.app-header{height:auto;min-height:119px}.module-menu{margin-left:auto}.workspace{height:calc(100dvh - 119px)}}@media print{.design-modes{display:none}}
+
+/* Small visual targets with a larger transparent pointer area. */
+.handle-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;overflow:hidden}.handle-lines line{stroke-width:1.3}.axis-x{stroke:#bf5555}.axis-y{stroke:#368669}.axis-z{stroke:#447daf}
+.model-handle,.model-handle:hover{width:28px;height:28px;border:0;background:transparent;box-shadow:none;border-radius:0;font-size:10px;color:#536171;text-shadow:0 1px 2px white;overflow:visible}
+.model-handle::before{content:'';position:absolute;left:10px;top:10px;width:8px;height:8px;box-sizing:border-box;border:1.5px solid currentColor;background:#ffffffd9;border-radius:50%}
+.handle-a,.handle-b{padding:0 0 26px 22px}.handle-move::before{border-radius:0;width:7px;height:7px;transform:rotate(45deg)}
+.handle-x,.handle-y,.handle-z{font-size:11px;font-weight:700;padding-bottom:24px}.handle-x{color:#bf5555}.handle-y{color:#368669}.handle-z{color:#447daf}.handle-x::before,.handle-y::before,.handle-z::before{background:currentColor;width:6px;height:6px;left:11px;top:11px;border:0;border-radius:1px}
+.model-handle:hover::before,.model-handle:focus-visible::before{outline:3px solid #ffffffb0}.model-handle:focus-visible{outline:1px dashed currentColor}
+
+.handle-x::before,.handle-y::before,.handle-z::before{width:7px;height:10px;left:10.5px;top:9px;clip-path:polygon(50% 0,100% 100%,0 100%);transform:rotate(var(--axis-angle,0deg))}

@@ -1,7 +1,8 @@
+import {sectionQuaternion,solveJoints} from './joints.js?v=2026-09-30';
 import * as THREE from 'three';
-import {OrbitControls} from './vendor/OrbitControls.js';
-import {PROFILES,length,cutSlopes} from './model.js?v=0.3.2';
-import {magneticTranslation} from './snap.js?v=0.3.2';
+import {OrbitControls} from './vendor/OrbitControls.js?v=2026-09-30';
+import {PROFILES,length,cutSlopes} from './model.js?v=2026-09-30';
+import {magneticTranslation} from './snap.js?v=2026-09-30';
 export class Viewer {
  constructor(el,onSelect,actions={}){
   this.el=el;this.onSelect=onSelect;this.actions=actions;this.mode='select';this.currentView='front';this.snap=.1;this.magnet=true;this.precision=1;this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#f0f1f3');
@@ -12,13 +13,14 @@ export class Viewer {
   this.scene.add(new THREE.HemisphereLight(0xf4f7ff,0x526076,2.8));const light=new THREE.DirectionalLight(0xffffff,3.4);light.position.set(1000,3000,2500);this.scene.add(light);const fill=new THREE.DirectionalLight(0xc7ddff,2);fill.position.set(-2000,1000,-3000);this.scene.add(fill);
   this.grid=new THREE.GridHelper(20000,200,0x9aa1aa,0xb8bdc4);this.grid.material.transparent=true;this.grid.material.opacity=.4;this.scene.add(this.grid);this.group=new THREE.Group();this.scene.add(this.group);this.dimensions=new THREE.Group();this.scene.add(this.dimensions);this.draft=new THREE.Group();this.scene.add(this.draft);this.labels=[];this.showDimensions=true;
   this.ray=new THREE.Raycaster();
-  this.handles=['a','move','b'].map(kind=>{
+  this.handleLines=document.createElementNS('http://www.w3.org/2000/svg','svg');this.handleLines.classList.add('handle-lines');el.append(this.handleLines);
+  this.handles=['a','move','b','x','y','z'].map(kind=>{
    const button=document.createElement('button');button.className='model-handle handle-'+kind;button.dataset.handle=kind;
-   button.setAttribute('aria-label',kind==='move'?'Przesuń zaznaczony element':kind==='a'?'Przesuń początek osi':'Przesuń koniec osi');button.title=button.getAttribute('aria-label')+' · przeciągnij lub użyj strzałek';button.textContent=kind==='move'?'✥':kind==='a'?'A':'B';button.hidden=true;el.append(button);
+   button.setAttribute('aria-label','xyz'.includes(kind)?'Przesuń w osi '+kind.toUpperCase():kind==='move'?'Przesuń zaznaczony element':kind==='a'?'Przesuń początek osi':'Przesuń koniec osi');button.title=button.getAttribute('aria-label')+' · przeciągnij lub użyj strzałek';button.textContent=kind==='move'?'':kind.toUpperCase();button.hidden=true;el.append(button);
    button.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();this.startDrag(e,kind);});
    button.addEventListener('pointermove',e=>{if(this.drag)this.moveDrag(e);});
    button.addEventListener('pointerup',e=>this.endDrag(e));button.addEventListener('pointercancel',()=>this.cancelGesture());
-   button.addEventListener('keydown',e=>{const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]};if(!directions[e.key])return;e.preventDefault();const part=this.project.elements.find(p=>p.id===this.selected);if(!part)return;const [x,y]=directions[e.key],delta=new THREE.Vector3(x,y,0).applyQuaternion(this.camera.quaternion).multiplyScalar(this.snap*(e.shiftKey?10:1));this.constrainDelta(delta);const a=new THREE.Vector3(...part.a),b=new THREE.Vector3(...part.b);if(kind!=='b')a.add(delta);if(kind!=='a')b.add(delta);this.actions.onMove?.(part.id,a.toArray(),b.toArray());});return {button,kind};
+   button.addEventListener('keydown',e=>{const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]};if(!directions[e.key])return;e.preventDefault();const part=this.project.elements.find(p=>p.id===this.selected);if(!part)return;const [x,y]=directions[e.key],delta='xyz'.includes(kind)?new THREE.Vector3().setComponent('xyz'.indexOf(kind),x||y):new THREE.Vector3(x,y,0).applyQuaternion(this.camera.quaternion);delta.multiplyScalar(this.snap*(e.shiftKey?.1:1));if(!'xyz'.includes(kind))this.constrainDelta(delta);const a=new THREE.Vector3(...part.a),b=new THREE.Vector3(...part.b);if(kind!=='b')a.add(delta);if(kind!=='a')b.add(delta);this.actions.onMove?.(part.id,a.toArray(),b.toArray());});return {button,kind};
   });
   this.snapMarker=document.createElement('span');this.snapMarker.className='snap-marker';this.snapMarker.hidden=true;el.append(this.snapMarker);
   const canvas=this.renderer.domElement;
@@ -47,9 +49,9 @@ export class Viewer {
    const geom=new THREE.ExtrudeGeometry(shape,{depth:length(e),bevelEnabled:false,steps:1});
    const position=geom.attributes.position,sa=cutSlopes(e.cuts?.a),sb=cutSlopes(e.cuts?.b);
    for(let i=0;i<position.count;i++){const slope=position.getZ(i)<length(e)/2?sa:sb;position.setZ(i,position.getZ(i)+slope[0]*position.getX(i)+slope[1]*position.getY(i));}position.needsUpdate=true;geom.computeVertexNormals();
-   const mat=new THREE.MeshStandardMaterial({color:e.id===selected?0xf5a623:0x677079,metalness:.4,roughness:.5});const mesh=new THREE.Mesh(geom,mat);mesh.position.fromArray(e.a);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),new THREE.Vector3().subVectors(new THREE.Vector3(...e.b),new THREE.Vector3(...e.a)).normalize());mesh.userData.id=e.id;const edge=new THREE.LineSegments(new THREE.EdgesGeometry(geom,25),new THREE.LineBasicMaterial({color:e.id===selected?0xa86a0c:0x38424b,transparent:true,opacity:.7}));mesh.add(edge);this.group.add(mesh);
+   const mat=new THREE.MeshStandardMaterial({color:e.id===selected?0xf5a623:0x677079,metalness:.4,roughness:.5});const mesh=new THREE.Mesh(geom,mat);mesh.position.fromArray(e.a);mesh.quaternion.copy(sectionQuaternion(e));mesh.userData.id=e.id;const edge=new THREE.LineSegments(new THREE.EdgesGeometry(geom,25),new THREE.LineBasicMaterial({color:e.id===selected?0xa86a0c:0x38424b,transparent:true,opacity:.7}));mesh.add(edge);this.group.add(mesh);
   }
-  if(project.elements.length)this.bounds=new THREE.Box3().setFromObject(this.group);else this.bounds=new THREE.Box3(new THREE.Vector3(0,0,0),new THREE.Vector3(1000,1000,0));
+  if(project.elements.length)this.bounds=new THREE.Box3().setFromObject(this.group,true);else this.bounds=new THREE.Box3(new THREE.Vector3(0,0,0),new THREE.Vector3(1000,1000,0));
   this.updateDimensions();
  }
  dimension(a,b,value){const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),dir=bv.clone().sub(av).normalize();let perp=Math.abs(dir.x)>.5?new THREE.Vector3(0,18,0):new THREE.Vector3(18,0,0);if(this.currentView==='top')perp=Math.abs(dir.x)>.5?new THREE.Vector3(0,0,18):new THREE.Vector3(18,0,0);if(this.currentView==='side')perp=Math.abs(dir.y)>.5?new THREE.Vector3(0,0,18):new THREE.Vector3(0,18,0);const pts=[av,bv,av.clone().sub(perp),av.clone().add(perp),bv.clone().sub(perp),bv.clone().add(perp)];this.dimensions.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x6d7782})));const label=document.createElement('span');label.className='dimension-label';label.textContent=value.toLocaleString('pl-PL',{minimumFractionDigits:this.precision,maximumFractionDigits:this.precision})+' mm';this.el.append(label);this.labels.push({el:label,position:av.clone().add(bv).multiplyScalar(.5)});}
@@ -67,7 +69,7 @@ export class Viewer {
   if(!this.magnet){this.showSnap(null);return null;}const targets=[];
   for(const part of this.project.elements){if(part.id===exclude)continue;
    targets.push({point:part.a,label:part.id+' · początek osi'},{point:part.b,label:part.id+' · koniec osi'});
-   const a=new THREE.Vector3(...part.a),q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),new THREE.Vector3(...part.b).sub(a).normalize()),inverse=q.clone().invert(),p=PROFILES[part.profile],L=length(part),sa=cutSlopes(part.cuts?.a),sb=cutSlopes(part.cuts?.b);
+   const a=new THREE.Vector3(...part.a),q=sectionQuaternion(part),inverse=q.clone().invert(),p=PROFILES[part.profile],L=length(part),sa=cutSlopes(part.cuts?.a),sb=cutSlopes(part.cuts?.b);
    const localNormal=normal.clone().applyQuaternion(inverse);
    for(const source of points){const local=new THREE.Vector3(...source).sub(a).applyQuaternion(inverse);
     for(const axis of [0,1])for(const sign of [-1,1]){
@@ -94,19 +96,23 @@ export class Viewer {
   this.actions.onGestureStart?.();
   const part=this.project.elements.find(p=>p.id===this.selected);if(!part)return;
   const anchor=kind==='a'?new THREE.Vector3(...part.a):kind==='b'?new THREE.Vector3(...part.b):new THREE.Vector3(...part.a).lerp(new THREE.Vector3(...part.b),.5),normal=this.planeNormal();
-  this.drag={kind,part:structuredClone(part),base:this.project,anchor,normal,start:this.planePoint(e,anchor,normal),target:e.currentTarget,pointerId:e.pointerId,moved:false};
+  this.drag={kind,part:structuredClone(part),base:this.project,anchor,normal,start:this.planePoint(e,anchor,normal),mouse:[e.clientX,e.clientY],rawLast:new THREE.Vector3(),adjusted:new THREE.Vector3(),target:e.currentTarget,pointerId:e.pointerId,moved:false};
   e.currentTarget.setPointerCapture(e.pointerId);this.controls.enabled=false;this.el.classList.add('dragging');
  }
  moveDrag(e){
-  const d=this.drag;if(!d)return;let delta=this.planePoint(e,d.anchor,d.normal).sub(d.start);
-  // Quantize in the view plane, leaving its depth unchanged.
-  delta.applyQuaternion(this.camera.quaternion.clone().invert());delta.x=Math.round(delta.x/this.snap)*this.snap;delta.y=Math.round(delta.y/this.snap)*this.snap;delta.z=0;delta.applyQuaternion(this.camera.quaternion);this.constrainDelta(delta);
+  const d=this.drag;if(!d)return;const axis='xyz'.includes(d.kind)?'xyz'.indexOf(d.kind):-1;
+  let raw=this.planePoint(e,d.anchor,d.normal).sub(d.start);
+  if(axis>=0){const origin=this.screenPoint(d.anchor),tip=this.screenPoint(d.anchor.clone().add(new THREE.Vector3().setComponent(axis,1))),dx=tip.x-origin.x,dy=tip.y-origin.y,den=dx*dx+dy*dy;if(den<1e-10)return;raw=new THREE.Vector3().setComponent(axis,((e.clientX-d.mouse[0])*dx+(e.clientY-d.mouse[1])*dy)/den);}
+  d.adjusted.add(raw.clone().sub(d.rawLast).multiplyScalar(e.shiftKey?.1:1));d.rawLast.copy(raw);let delta=d.adjusted.clone(),step=this.snap*(e.shiftKey?.1:1);
+  if(axis>=0)delta.setComponent(axis,Math.round(delta.getComponent(axis)/step)*step);
+  else {delta.applyQuaternion(this.camera.quaternion.clone().invert());delta.x=Math.round(delta.x/step)*step;delta.y=Math.round(delta.y/step)*step;delta.z=0;delta.applyQuaternion(this.camera.quaternion);this.constrainDelta(delta);}
   const a=new THREE.Vector3(...d.part.a),b=new THREE.Vector3(...d.part.b);if(d.kind!=='b')a.add(delta);if(d.kind!=='a')b.add(delta);
-  const best=this.snapPoints(d.kind==='move'?[a.toArray(),b.toArray()]:[d.kind==='a'?a.toArray():b.toArray()],d.part.id,d.normal);
+  let best=null;if(e.altKey||e.shiftKey)this.showSnap(null);else best=this.snapPoints(!['a','b'].includes(d.kind)?[a.toArray(),b.toArray()]:[d.kind==='a'?a.toArray():b.toArray()],d.part.id,d.normal);
+  if(best&&axis>=0&&best.delta.some((v,i)=>i!==axis&&Math.abs(v)>1e-7)){best=null;this.showSnap(null);}
   if(best){const correction=new THREE.Vector3(...best.delta);if(d.kind!=='b')a.add(correction);if(d.kind!=='a')b.add(correction);}
   d.preview={...d.part,a:a.toArray(),b:b.toArray()};d.moved=Math.hypot(...a.toArray().map((v,i)=>v-d.part.a[i]),...b.toArray().map((v,i)=>v-d.part.b[i]))>1e-8;
   if(length(d.preview)<1)return;
-  this.update({...d.base,elements:d.base.elements.map(p=>p.id===d.part.id?d.preview:p)},this.selected);this.actions.onCursor?.(d.kind==='b'?b:a);
+  try{this.update(solveJoints(d.base,{...d.base,elements:d.base.elements.map(p=>p.id===d.part.id?d.preview:p)}),this.selected);}catch(error){this.actions.onGestureError?.(error.message);return;}this.actions.onCursor?.(d.kind==='b'?b:a);
  }
  endDrag(e){
   const d=this.drag;if(!d)return;if(e.button!==0)return;
@@ -114,9 +120,14 @@ export class Viewer {
   this.update(d.base,this.selected);if(d.moved&&preview)this.actions.onMove?.(d.part.id,preview.a,preview.b);
  }
  cancelGesture(){const d=this.drag;this.drag=null;this.down=null;this.anchor=null;this.clear(this.draft);this.showSnap(null);this.controls.enabled=this.mode==='select';this.el.classList.remove('dragging');if(d){if(d.target.hasPointerCapture(d.pointerId))d.target.releasePointerCapture(d.pointerId);this.update(d.base,this.selected);}}
+ screenPoint(world){const p=world.clone().project(this.camera);return {x:(p.x+1)/2*this.el.clientWidth,y:(1-p.y)/2*this.el.clientHeight,visible:Math.abs(p.x)<=1&&Math.abs(p.y)<=1&&Math.abs(p.z)<=1};}
  positionHandles(){
-  const part=this.project?.elements.find(p=>p.id===this.selected);
-  for(const {button,kind} of this.handles){button.hidden=!part||this.mode==='draw';if(!part)continue;const a=new THREE.Vector3(...part.a),b=new THREE.Vector3(...part.b),p=(kind==='a'?a:kind==='b'?b:a.lerp(b,.5)).project(this.camera);button.style.left=(p.x+1)/2*this.el.clientWidth+'px';button.style.top=(-p.y+1)/2*this.el.clientHeight+'px';button.hidden||=Math.abs(p.x)>1||Math.abs(p.y)>1||p.z>1;}
+  const part=this.project?.elements.find(p=>p.id===this.selected);this.handleLines.replaceChildren();
+  for(const {button,kind} of this.handles){button.hidden=!part||this.mode==='draw';if(button.hidden)continue;
+   const a=new THREE.Vector3(...part.a),b=new THREE.Vector3(...part.b),mid=a.clone().lerp(b,.5),p=this.screenPoint(kind==='a'?a:kind==='b'?b:mid);
+   if('xyz'.includes(kind)){const tip=this.screenPoint(mid.clone().add(new THREE.Vector3().setComponent('xyz'.indexOf(kind),100))),dx=tip.x-p.x,dy=tip.y-p.y,n=Math.hypot(dx,dy);if(n<3){button.hidden=true;continue;}button.style.setProperty('--axis-angle',(Math.atan2(dy,dx)*180/Math.PI+90)+'deg');const line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('x1',p.x+dx/n*10);line.setAttribute('y1',p.y+dy/n*10);p.x+=dx/n*64;p.y+=dy/n*64;line.setAttribute('x2',p.x);line.setAttribute('y2',p.y);line.setAttribute('class','axis-'+kind);this.handleLines.append(line);}
+   button.style.left=p.x+'px';button.style.top=p.y+'px';button.hidden=!p.visible;
+  }
   if(this.snapTarget){const p=new THREE.Vector3(...this.snapTarget.point).project(this.camera);this.snapMarker.style.left=(p.x+1)/2*this.el.clientWidth+'px';this.snapMarker.style.top=(-p.y+1)/2*this.el.clientHeight+'px';}
  }
  setMode(mode){this.cancelGesture?.();this.mode=mode;this.anchor=null;this.clear(this.draft);this.controls.enabled=mode==='select';this.renderer.domElement.style.cursor=mode==='draw'?'crosshair':mode==='move'?'move':'default';this.actions.onDrawStatus?.(false);}

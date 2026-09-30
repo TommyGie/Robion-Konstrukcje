@@ -1,10 +1,11 @@
-import {PROFILES,DEFAULTS,generate,bom,totals,length,validateElement,validateProject,stockLength} from './model.js?v=0.3.2';
-import {Viewer} from './viewer.js?v=0.3.2';
+import {solveJoints} from './joints.js?v=2026-09-30';
+import {PROFILES,DEFAULTS,generate,bom,totals,length,validateElement,validateProject,stockLength} from './model.js?v=2026-09-30';
+import {Viewer} from './viewer.js?v=2026-09-30';
 const $=id=>document.getElementById(id);
 let precision=1,liveEdit=null;
 const fmt=(n,d=precision)=>(Math.abs(n)<.5*10**-d?0:n).toLocaleString('pl-PL',{minimumFractionDigits:d,maximumFractionDigits:d}),inputNumber=n=>(Math.abs(n)<.5*10**-precision?0:n).toLocaleString('en-US',{useGrouping:false,minimumFractionDigits:precision,maximumFractionDigits:precision});
 const cutText=c=>fmt(c.angle)+'°'+(c.angle===90?'':(c.plane==='width'?' · S':' · W')+(c.flipped?' ↶':''));
-let project=generate({...DEFAULTS,template:'table',width:1200,height:850,depth:700,infill:false}),selected=null,viewer,dirty=false;
+let project=generate({...DEFAULTS,template:'table',joint:'miter',width:1200,height:850,depth:700,infill:false}),selected=null,viewer,dirty=false;
 const history=[],future=[];
 const options=ids=>ids.map(id=>`<option value="${id}">${PROFILES[id].name}</option>`).join('');
 $('frame').innerHTML=options(['40-2','50-2','60-3','80-3']);$('bar').innerHTML=options(['20-1.5','25-2','30-2']);
@@ -20,14 +21,14 @@ function render(keepEditor=false){
  $('save-status').textContent=dirty?'Niezapisane zmiany':'Projekt w pamięci · pobierz plik, aby zachować';
 }
 function select(id){finishEdit();selected=id;if(id&&viewer?.mode==='select')document.body.classList.add('show-elements');render();}
-$('generator').onsubmit=e=>{e.preventDefault();try{regenerate({template:$('template').value,depth:$('depth').value,width:$('width').value,height:$('height').value,frame:$('frame').value,bar:$('bar').value,gap:$('gap').disabled?DEFAULTS.gap:$('gap').value,infill:!$('infill').disabled&&$('infill').checked});toast('Konstrukcja i lista cięcia zostały przeliczone.');}catch(err){toast(err.message,true);}};
+$('generator').onsubmit=e=>{e.preventDefault();try{regenerate({joint:$('template').value==='table'?$('joint').value:'butt',template:$('template').value,depth:$('depth').value,width:$('width').value,height:$('height').value,frame:$('frame').value,bar:$('bar').value,gap:$('gap').disabled?DEFAULTS.gap:$('gap').value,infill:!$('infill').disabled&&$('infill').checked});toast('Konstrukcja i lista cięcia zostały przeliczone.');}catch(err){toast(err.message,true);}};
 $('project-name').onchange=()=>commit({...project,name:$('project-name').value.trim()||'Nowa konstrukcja'});
-try{viewer=new Viewer($('viewport'),select,{onGestureStart:()=>{finishEdit();if($('edit-form')?.contains(document.activeElement))document.activeElement.blur();},onAdd:(a,b)=>{try{const e=validateElement({id:nextId(),name:'Profil rysowany',profile:$('draw-profile').value,a,b});commit({...project,elements:[...project.elements,e]},e.id);toast('Dodano profil '+e.id+' · '+fmt(length(e))+' mm.');}catch(err){toast(err.message,true);}},onMove:(id,a,b)=>{try{const e=project.elements.find(e=>e.id===id);editParts([{...e,a,b}]);toast('Przesunięto element '+id+'.');}catch(err){render();toast(err.message,true);}},onCursor:p=>{$('cursor-status').textContent='X: '+fmt(p.x)+'  Y: '+fmt(p.y)+' mm';},onDrawStatus:started=>{if(viewer?.mode==='draw')$('canvas-help').textContent=started?'Kliknij koniec profilu · Shift: poziomo / pionowo · Esc: zakończ':'Kliknij początek profilu, potem jego koniec · Esc: zakończ';}});}catch(err){const p=document.createElement('p');p.className='webgl-error';p.textContent='Widok 3D wymaga obsługi WebGL. Edytor i lista materiałów są nadal dostępne.';$('viewport').append(p);console.error(err);}
-function changeView(view){document.querySelectorAll('[data-view]').forEach(v=>v.classList.toggle('active',v.dataset.view===view));if(view!=='front')setMode('select');viewer?.fit(view);$('canvas-help').textContent=view==='3d'?'Przeciągnij: obrót · kółko: zoom · prawy przycisk: przesuń':'Kliknij profil, aby go edytować · kółko: zoom · prawy przycisk: przesuń plan';}
+try{viewer=new Viewer($('viewport'),select,{onGestureError:message=>toast(message,true),onGestureStart:()=>{finishEdit();if($('edit-form')?.contains(document.activeElement))document.activeElement.blur();},onAdd:(a,b)=>{try{const e=validateElement({id:nextId(),name:'Profil rysowany',profile:$('draw-profile').value,a,b});commit({...project,elements:[...project.elements,e]},e.id);toast('Dodano profil '+e.id+' · '+fmt(length(e))+' mm.');}catch(err){toast(err.message,true);}},onMove:(id,a,b)=>{try{const e=project.elements.find(e=>e.id===id);editParts([{...e,a,b}]);toast('Przesunięto element '+id+'.');}catch(err){render();toast(err.message,true);}},onCursor:p=>{$('cursor-status').textContent='X: '+fmt(p.x)+'  Y: '+fmt(p.y)+' mm';},onDrawStatus:started=>{if(viewer?.mode==='draw')$('canvas-help').textContent=started?'Kliknij koniec profilu · Shift: poziomo / pionowo · Esc: zakończ':'Kliknij początek profilu, potem jego koniec · Esc: zakończ';}});}catch(err){const p=document.createElement('p');p.className='webgl-error';p.textContent='Widok 3D wymaga obsługi WebGL. Edytor i lista materiałów są nadal dostępne.';$('viewport').append(p);console.error(err);}
+function changeView(view){document.querySelectorAll('[data-view]').forEach(v=>v.classList.toggle('active',v.dataset.view===view));if(view!=='front')setMode('select');viewer?.fit(view);$('canvas-help').textContent=view==='3d'?'X / Y / Z: przesuwanie · A / B: końce · Shift: dokładnie · Alt: bez magnesu':'Kliknij profil, aby go edytować · kółko: zoom · prawy przycisk: przesuń plan';}
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>changeView(b.dataset.view));
 $('fit').onclick=()=>viewer?.fit(document.querySelector('[data-view].active')?.dataset.view);
 $('dimensions').onchange=()=>viewer?.toggleDimensions($('dimensions').checked);
-function syncForm(){for(const k of ['template','width','height','depth','frame','bar','gap']){$(k).value=['width','height','depth','gap'].includes(k)?inputNumber(project.params[k]):project.params[k];if($(k).type==='number')$(k).step=10**-precision;}$('infill').checked=project.params.infill;$('project-name').value=project.name;syncTemplateFields();}
+function syncForm(){for(const k of ['template','width','height','depth','frame','bar','gap']){$(k).value=['width','height','depth','gap'].includes(k)?inputNumber(project.params[k]):project.params[k];if($(k).type==='number')$(k).step=10**-precision;}$('joint').value=project.params.joint??'butt';$('infill').checked=project.params.infill;$('project-name').value=project.name;syncTemplateFields();}
 function commit(next,selectId=selected,fit=false){
  finishEdit();const valid=validateProject(next);if(JSON.stringify(valid)===JSON.stringify(project))return;pushHistory(project);future.length=0;project=valid;selected=selectId;dirty=true;syncForm();render();if(fit)viewer?.fit(document.querySelector('[data-view].active')?.dataset.view);
 }
@@ -39,10 +40,12 @@ function coordinateFields(prefix,point){return `<div class="coordinate-grid">${[
 const templatePresets={table:{width:1200,height:850,depth:700,infill:false},frame:{width:1200,height:800,depth:600,infill:false},railing:{width:2000,height:1100,depth:600,infill:true},gate:{width:1000,height:1800,depth:600,infill:true}};
 function syncTemplateFields(){
  const kind=$('template').value,hasInfill=['gate','railing'].includes(kind);
+ $('joint-field').hidden=kind!=='table';$('joint-note').hidden=kind!=='table';$('joint-note').textContent=$('joint').value==='miter'?'Nogi i belki długie: narożniki 45°. Poprzeczki: 90° do boków ram. Doły nóg wymagają 4 stopek / zaślepek (poza modelem).':'Cięcia 90°. Otwarte góry i doły nóg wymagają zamknięcia osobno.';
  $('depth-field').hidden=kind!=='table';$('depth').disabled=kind!=='table';
  document.querySelectorAll('.infill-field').forEach(el=>{el.hidden=!hasInfill;el.querySelectorAll('input,select').forEach(input=>input.disabled=!hasInfill);});
  $('template-description').textContent={table:'Stelaż przestrzenny z czterema nogami. Wymiary bez blatu.',frame:'Płaska rama z czterech profili, łączona na styk.',railing:'Słupki, pochwyt i szczeble. Dolna poprzeczka 100 mm nad podstawą.',gate:'Skrzydło z ramą i opcjonalnym wypełnieniem. Wymiary bez słupków i luzów.'}[kind];
 }
+$('joint').onchange=syncTemplateFields;
 $('template').onchange=()=>{const preset=templatePresets[$('template').value];for(const field of ['width','height','depth'])$(field).value=inputNumber(preset[field]);$('infill').checked=preset.infill;syncTemplateFields();$('gap-info').textContent='Wstaw szablon, aby utworzyć konstrukcję z tych parametrów.';};
 function pushHistory(before){history.push(structuredClone(before));if(history.length>60)history.shift();}
 function currentElement(){return project.elements.find(e=>e.id===selected);}
@@ -60,38 +63,50 @@ function cancelEdit(){if(!liveEdit)return;project=liveEdit.before;liveEdit=null;
 function liveInput(input){
  if(!liveEdit)liveEdit={before:structuredClone(project),input};
  try{
-  const e=structuredClone(currentElement());if(!e)return;
+  const e=structuredClone(currentElement());if(!e)return;if(input.name.startsWith('cut-a-'))e.baseAlignment='local';
   if(input.type==='number'&&(input.value===''||!Number.isFinite(input.valueAsNumber)))throw Error('Wpisz poprawną liczbę.');
   if(/^[ab][012]$/.test(input.name))e[input.name[0]][Number(input.name[1])]=input.valueAsNumber;
   else if(input.name.startsWith('cut')){const [,end,key]=input.name.split('-');if(key==='angle')e.cuts[end].flipped=liveEdit.before.elements.find(p=>p.id===e.id).cuts[end].flipped;e.cuts[end][key]=input.type==='checkbox'?input.checked:input.type==='number'?input.valueAsNumber:input.value;}
   else e[input.name]=input.value;
-  const valid=validateElement(e);project=validateProject({...project,elements:project.elements.map(p=>p.id===e.id?valid:p)});dirty=true;input.removeAttribute('aria-invalid');$('edit-error').textContent='';render(true);
+  const valid=validateElement(e);project=validateProject(solveJoints(project,{...project,elements:project.elements.map(p=>p.id===e.id?valid:p)}));dirty=true;input.removeAttribute('aria-invalid');$('edit-error').textContent='';render(true);
  }catch(error){input.setAttribute('aria-invalid','true');$('edit-error').textContent=error.message;}
 }
 function cutFields(end,cut){return `<fieldset class="cut-fields"><legend>${end==='a'?'Cięcie A · początek':'Cięcie B · koniec'}</legend><div class="cut-row"><label>Kąt [°]<input type="number" aria-label="Kąt cięcia ${end.toUpperCase()}" name="cut-${end}-angle" value="${inputNumber(cut.angle)}" step="${10**-precision}" min="0.1" max="179.9" required></label><label>Płaszczyzna<select aria-label="Płaszczyzna cięcia ${end.toUpperCase()}" name="cut-${end}-plane"><option value="width" ${cut.plane==='width'?'selected':''}>S · szerokość</option><option value="height" ${cut.plane==='height'?'selected':''}>W · wysokość</option></select></label></div><label class="check-row"><input type="checkbox" name="cut-${end}-flipped" ${cut.flipped?'checked':''}> Odwróć skos</label></fieldset>`;}
 function updateEditorNote(){const e=currentElement();if(!e||!$('element-note'))return;$('element-note').textContent=`Oś: ${fmt(length(e))} mm · do cięcia: ${fmt(stockLength(e))} mm`;
- for(const end of ['a','b']){const c=e.cuts[end];const info=$('cut-result-'+end);if(info)info.textContent=cutText(c);}
+ for(const end of ['a','b'])for(let i=0;i<3;i++){const ctrl=$('edit-form')?.elements[end+i];if(ctrl&&ctrl!==document.activeElement)ctrl.value=inputNumber(e[end][i]);}
+ const alignment=$('edit-form')?.elements.baseAlignment;if(alignment&&alignment!==document.activeElement)alignment.value=e.baseAlignment??'local';
+ for(const end of ['a','b']){const c=e.cuts[end];const info=$('cut-result-'+end);if(info)info.textContent=cutText(c);for(const key of ['angle','plane','flipped']){const ctrl=$('edit-form')?.elements['cut-'+end+'-'+key];if(ctrl&&ctrl!==document.activeElement){if(ctrl.type==='checkbox')ctrl.checked=c[key];else ctrl.value=typeof c[key]==='number'?inputNumber(c[key]):c[key];}}}
+}
+function jointEditor(e){
+ const links=(project.joints??[]).map((j,i)=>({j,i})).filter(({j})=>[j.first,j.second].some(r=>r.id===e.id));
+ return `<fieldset class="cut-fields"><legend>Połączenia profilu</legend><p class="hint">Wspólny skos dwóch jednakowych profili kwadratowych. Końce osi muszą spotykać się. Przesunięcie węzła zmienia oba profile. Podcięcia i połączenia wieloprofilowe nie są jeszcze obsługiwane.</p>${links.map(({j,i})=>{const own=[j.first,j.second].find(r=>r.id===e.id),other=[j.first,j.second].find(r=>r.id!==e.id);return `<p>${own.end.toUpperCase()} ↔ ${escape(other.id)} · ${other.end.toUpperCase()} <button type="button" data-disconnect="${i}">Odłącz ${own.end.toUpperCase()}</button></p>`;}).join('')}<label>Koniec tego profilu<select id="joint-own"><option value="a">A · początek</option><option value="b">B · koniec</option></select></label><label>Drugi profil<select id="joint-partner">${project.elements.filter(p=>p.id!==e.id).map(p=>`<option value="${escape(p.id)}">${escape(p.id)} · ${escape(p.name)}</option>`).join('')}</select></label><label>Koniec drugiego profilu<select id="joint-other"><option value="a">A · początek</option><option value="b">B · koniec</option></select></label><button type="button" id="create-joint">Połącz wspólnym skosem</button><p id="joint-error" class="error" role="status"></p></fieldset>`;
+}
+function bindJointEditor(e){
+ $('create-joint').disabled=project.elements.length<2;
+ $('create-joint').onclick=()=>{finishEdit();try{const j={type:'miter',first:{id:e.id,end:$('joint-own').value},second:{id:$('joint-partner').value,end:$('joint-other').value}},next=validateProject({...project,joints:[...(project.joints??[]),j]});commit(solveJoints(project,next));toast('Połączono profile. Skosy i długości będą przeliczane razem.');}catch(error){$('joint-error').textContent=error.message;}};
+ document.querySelectorAll('[data-disconnect]').forEach(button=>button.onclick=()=>{finishEdit();commit({...project,joints:project.joints.filter((_,i)=>i!==Number(button.dataset.disconnect))});toast('Odłączono połączenie. Zachowano ostatnią geometrię cięć.');});
 }
 function renderEditor(){
  const e=currentElement();
  if(!e){$('element-editor').innerHTML='<div class="empty-selection"><span class="select-symbol">⌖</span><strong>Wybierz profil</strong><p>Kliknij element, aby pokazać uchwyty i edytować jego wymiary.</p></div>';return;}
- $('element-editor').innerHTML=`<form id="edit-form" class="element-fields"><h3>${escape(e.id)} · Właściwości profilu</h3><label>Nazwa elementu<input name="name" aria-label="Nazwa elementu" value="${escape(e.name)}" maxlength="80" required></label><label>Przekrój [mm]<select name="profile" aria-label="Przekrój elementu">${options(Object.keys(PROFILES))}</select></label><div class="subheading">A · Początek osi [mm]</div>${coordinateFields('a',e.a)}<div class="subheading">B · Koniec osi [mm]</div>${coordinateFields('b',e.b)}<p id="element-note" class="note-block"></p>${cutFields('a',e.cuts.a)}${cutFields('b',e.cuts.b)}<p class="cut-summary">A: <strong id="cut-result-a"></strong> · B: <strong id="cut-result-b"></strong></p><p class="hint">90° = cięcie proste. Kąt ponad 90° przeliczamy na skos z odwróceniem materiału. S/W to lokalne boki przekroju.</p><p id="edit-error" class="error" role="status"></p><p class="live-note">Zmiany widoczne od razu · Esc anuluje edycję pola</p><button type="button" id="save-element" class="primary full">↓ Zapisz projekt</button><div class="field-actions"><button id="duplicate" type="button">Duplikuj</button><button id="delete" type="button" class="danger">Usuń</button></div></form>`;
- const form=$('edit-form');form.elements.profile.value=e.profile;updateEditorNote();
+ $('element-editor').innerHTML=`<form id="edit-form" class="element-fields"><h3>${escape(e.id)} · Właściwości profilu</h3><label>Nazwa elementu<input name="name" aria-label="Nazwa elementu" value="${escape(e.name)}" maxlength="80" required></label><label>Przekrój [mm]<select name="profile" aria-label="Przekrój elementu">${options(Object.keys(PROFILES))}</select></label><div class="subheading">A · Początek osi [mm]</div>${coordinateFields('a',e.a)}<div class="subheading">B · Koniec osi [mm]</div>${coordinateFields('b',e.b)}<p id="element-note" class="note-block"></p>${cutFields('a',e.cuts.a)}${cutFields('b',e.cuts.b)}<label>Wyrównanie końca A<select name="baseAlignment" aria-label="Wyrównanie końca A"><option value="local">Zachowaj kąt względem profilu</option><option value="horizontal">Do poziomu · podłoga</option><option value="verticalX">Do pionu · płaszczyzna YZ</option><option value="verticalZ">Do pionu · płaszczyzna XY</option></select></label>${jointEditor(e)}<p class="cut-summary">A: <strong id="cut-result-a"></strong> · B: <strong id="cut-result-b"></strong></p><p class="hint">90° = cięcie proste. Kąt ponad 90° przeliczamy na skos z odwróceniem materiału. S/W to lokalne boki przekroju.</p><p id="edit-error" class="error" role="status"></p><p class="live-note">Zmiany widoczne od razu · Esc anuluje edycję pola</p><button type="button" id="save-element" class="primary full">↓ Zapisz projekt</button><div class="field-actions"><button id="duplicate" type="button">Duplikuj</button><button id="delete" type="button" class="danger">Usuń</button></div></form>`;
+ const form=$('edit-form');form.elements.profile.value=e.profile;form.elements.baseAlignment.value=e.baseAlignment??'local';bindJointEditor(e);updateEditorNote();
  form.addEventListener('focusin',event=>{if(!event.target.name)return;if(liveEdit?.input!==event.target)finishEdit();liveEdit={before:structuredClone(project),input:event.target};});
  form.addEventListener('input',event=>{if(event.target.name)liveInput(event.target);});
  form.addEventListener('focusout',event=>{if(liveEdit?.input===event.target)finishEdit();});
  form.onsubmit=event=>{event.preventDefault();finishEdit();};
  $('save-element').onclick=exportProject;
  $('duplicate').onclick=()=>{finishEdit();const source=currentElement(),id=nextId(),copy={...structuredClone(source),id,name:(source.name+' · kopia').slice(0,80),a:source.a.map((v,i)=>v+(i===0?100:0)),b:source.b.map((v,i)=>v+(i===0?100:0))};try{commit({...project,elements:[...project.elements,validateElement(copy)]},id);toast('Kopia przesunięta o 100 mm w osi X.');}catch(err){toast(err.message,true);}};
+ for(const j of project.joints??[]){const end=[j.first,j.second].find(r=>r.id===e.id)?.end;if(end)for(const key of ['angle','plane','flipped']){const control=form.elements['cut-'+end+'-'+key];control.disabled=true;control.title='Kąt obliczany automatycznie z połączonym profilem';}}
  $('delete').onclick=removeSelected;
 }
 function editParts(updates){
  if(!Array.isArray(updates)||!updates.length||updates.length>100)throw Error('Podaj od 1 do 100 elementów.');
- finishEdit();const patch=new Map(updates.map(e=>[e.id,validateElement({...e,cuts:e.cuts??project.elements.find(p=>p.id===e.id)?.cuts})]));if(patch.size!==updates.length)throw Error('Element powtórzony w aktualizacji.');
+ finishEdit();const patch=new Map(updates.map(e=>[e.id,validateElement({...project.elements.find(p=>p.id===e.id),...e,cuts:e.cuts??project.elements.find(p=>p.id===e.id)?.cuts})]));if(patch.size!==updates.length)throw Error('Element powtórzony w aktualizacji.');
  for(const id of patch.keys())if(!project.elements.some(e=>e.id===id))throw Error('Nie znaleziono elementu '+id+'.');
- commit({...project,elements:project.elements.map(e=>patch.get(e.id)??e)});return totals(project.elements);
+ commit(solveJoints(project,{...project,elements:project.elements.map(e=>patch.get(e.id)??e)}));return totals(project.elements);
 }
-function removeSelected(){if(!selected)return;const id=selected;commit({...project,elements:project.elements.filter(e=>e.id!==id)},null);toast('Usunięto '+id+'. Możesz użyć Cofnij.');}
+function removeSelected(){if(!selected)return;const id=selected;if(project.joints?.some(j=>[j.first,j.second].some(r=>r.id===id))){toast('Najpierw odłącz połączenia tego profilu, aby go usunąć.',true);return;}commit({...project,elements:project.elements.filter(e=>e.id!==id)},null);toast('Usunięto '+id+'. Możesz użyć Cofnij.');}
 function nextId(){let n=1;while(project.elements.some(e=>e.id==='P'+n))n++;return 'P'+n;}
 function showAdd(){
  const d=$('add-dialog');d.innerHTML=`<form id="add-form"><h2>Dodaj profil</h2><p class="hint">Określ przekrój i dwa końce osi. X: szerokość, Y: wysokość, Z: głębokość.</p><label>Nazwa<input name="name" aria-label="Nazwa nowego elementu" value="Profil dodatkowy" maxlength="80" required></label><label>Przekrój [mm]<select name="profile" aria-label="Przekrój nowego elementu">${options(Object.keys(PROFILES))}</select></label><div class="subheading">Początek osi [mm]</div>${coordinateFields('a',[0,0,0])}<div class="subheading">Koniec osi [mm]</div>${coordinateFields('b',[1000,0,0])}<p id="add-error" role="alert" class="hint error"></p><div class="field-actions"><button type="button" id="cancel-add">Anuluj</button><button type="submit" class="primary">Dodaj do modelu</button></div></form>`;
@@ -106,7 +121,7 @@ function exportCsv(){finishEdit();const rows=[['Profil [mm]','Długość do cię
 $('file-actions').append(button('open-project','Otwórz',()=>$('import-file').click()),button('save-project','↓ Zapisz projekt',exportProject,'primary'));
 $('editor-tools').append(button('add-profile','+ Dodaj profil',showAdd,'add'));$('history-controls').append(button('undo','↶',undo),button('redo','↷',redo));$('undo').title='Cofnij (Ctrl / ⌘ Z)';$('undo').setAttribute('aria-label','Cofnij');$('redo').title='Ponów (Ctrl / ⌘ Shift Z)';$('redo').setAttribute('aria-label','Ponów');
 $('bom-actions').append(button('csv','↓ CSV',exportCsv),button('print','Drukuj / PDF',()=>window.print()));
-$('import-file').onchange=async ev=>{const file=ev.target.files[0];if(!file)return;try{if(file.size>2_000_000)throw Error('Plik jest zbyt duży. Limit: 2 MB.');const next=validateProject(JSON.parse(await file.text()));commit(next,null,true);dirty=false;render();toast('Wczytano projekt. Poprzednią wersję przywrócisz przyciskiem Cofnij.');}catch(err){toast('Nie udało się wczytać: '+err.message,true);}finally{ev.target.value='';}};
+$('import-file').onchange=async ev=>{const file=ev.target.files[0];if(!file)return;try{if(file.size>2_000_000)throw Error('Plik jest zbyt duży. Limit: 2 MB.');const next=validateProject(JSON.parse(await file.text()));commit(solveJoints(next,next),null,true);dirty=false;render();toast('Wczytano projekt. Poprzednią wersję przywrócisz przyciskiem Cofnij.');}catch(err){toast('Nie udało się wczytać: '+err.message,true);}finally{ev.target.value='';}};
 window.addEventListener('keydown',e=>{
  if($('add-dialog').open)return;
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
@@ -116,7 +131,7 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 $('draw-profile').innerHTML=options(Object.keys(PROFILES));$('draw-profile').value='40-2';
-function setMode(mode){if(mode!=='select'&&viewer?.currentView!=='front')changeView('front');viewer?.setMode(mode);document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));$('assembly-options').classList.toggle('drawing',mode==='draw');$('canvas-help').textContent=mode==='draw'?'Kliknij początek profilu, potem jego koniec · Shift: prosto · Esc: zakończ':mode==='move'?'Przeciągnij profil lub uchwyt ✥ · A / B zmieniają końce · Esc: anuluj':'Kliknij profil · ✥ przesuwa całość · A / B zmieniają końce · kółko: zoom';}
+function setMode(mode){if(mode==='draw'&&viewer?.currentView!=='front')changeView('front');viewer?.setMode(mode);document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));$('assembly-options').classList.toggle('drawing',mode==='draw');$('canvas-help').textContent=mode==='draw'?'Kliknij początek profilu, potem jego koniec · Shift: prosto · Esc: zakończ':mode==='move'?'X / Y / Z: przesuwanie po osi · Shift: dokładnie · Alt: bez magnesu · Esc: anuluj':'Kliknij profil · X / Y / Z: przesuwanie · A / B: końce · Shift: dokładnie';}
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 $('snap').onchange=()=>{if(viewer)viewer.snap=Number($('snap').value);};
 $('magnet').onclick=()=>{const on=$('magnet').getAttribute('aria-pressed')!=='true';$('magnet').setAttribute('aria-pressed',String(on));$('magnet').classList.toggle('active',on);if(viewer){viewer.magnet=on;viewer.showSnap(null);}toast(on?'Magnes włączony · końce osi i ścianki profili.':'Magnes wyłączony.');};
@@ -127,7 +142,7 @@ $('toggle-elements').onclick=()=>panelToggle('show-elements',!document.body.clas
 $('toggle-bom').onclick=()=>panelToggle('show-bom',!document.body.classList.contains('show-bom'));
 $('close-elements').onclick=()=>panelToggle('show-elements',false);$('close-bom').onclick=()=>panelToggle('show-bom',false);
 $('zoom-in').onclick=()=>viewer?.zoom(1.25);$('zoom-out').onclick=()=>viewer?.zoom(.8);
-$('empty-scene').onclick=()=>{commit({...project,name:'Nowa konstrukcja',elements:[]},null,true);document.body.classList.remove('show-generator');setMode('draw');toast('Pusta scena. Wybierz profil i wskaż dwa punkty na planie.');};
+$('empty-scene').onclick=()=>{commit({...project,name:'Nowa konstrukcja',elements:[],joints:[]},null,true);document.body.classList.remove('show-generator');setMode('draw');toast('Pusta scena. Wybierz profil i wskaż dwa punkty na planie.');};
 
 if(window.innerWidth>760)document.body.classList.add('show-generator');
 const mc=document.modelContext;
