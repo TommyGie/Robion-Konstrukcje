@@ -1,0 +1,45 @@
+name: ROBION - publikacja strony
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: robion-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Pobierz pliki
+        uses: actions/checkout@v4
+      - name: Przygotuj GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Przygotuj zawartosc strony
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir _site
+          cp -R fonts rooms vendor _site/
+          cp .nojekyll CNAME *.html *.js *.css *.png *.svg _site/
+          test -s _site/index.html
+          test -s _site/rooms.html
+          test -s _site/joints.js
+      - name: Wyslij pliki strony
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Opublikuj strone
+        id: deployment
+        uses: actions/deploy-pages@v5
