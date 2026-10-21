@@ -1,4 +1,4 @@
-import {PPR_PARTS,PPR_SIZES,pprData,pprPorts} from './ppr.js?v=2026-10-21';
+import {PPR_PARTS,PPR_SIZES,pprData,pprPorts} from './ppr.js?v=2026-10-21-mobile';
 // Pure project model. Millimetres, Y up; no renderer or hydraulic solver dependency.
 export const FORMAT = 'robion-hydro';
 export const clone = value => JSON.parse(JSON.stringify(value));
@@ -68,4 +68,14 @@ export function portCompatibility(x,a,y,b){
  if(u.diameter!==v.diameter)return 'Końce mają różne średnice.';
  if(x.technical.family==='ppr'&&u.type===v.type)return u.type==='socket'?'Dwa kielichy wymagają odcinka rury.':'Dwie rury wymagają mufy lub innej kształtki.';
  return null;
+}
+
+// Flat views keep every connection axis on the exact editing layer.
+export function planarPlacement(kind,point,size,plane,level,diameter=25,outlet=20){
+ const rotation={XY:[0,0,0],XZ:[90,0,0],YZ:[0,-90,0]}[plane];
+ const axis={XY:2,XZ:1,YZ:0}[plane],center=cellCenter(point,size);
+ const local=cellPlacement(kind,point,size,diameter,outlet);
+ const offset=rotate(center.map((n,i)=>n-local[i]),rotation);
+ center[axis]=level;
+ return {position:center.map((n,i)=>n-offset[i]),rotation,center};
 }

@@ -1,5 +1,5 @@
-import {Vector3,Matrix4,Euler} from '../vendor/three.module.js?v=2026-10-21';
-import {clone,element,endpoints,portDirection,ports,portCompatibility,validate} from './model.js?v=2026-10-21';
+import {Vector3,Matrix4,Euler} from '../vendor/three.module.js?v=2026-10-21-mobile';
+import {clone,element,endpoints,portDirection,ports,portCompatibility,validate} from './model.js?v=2026-10-21-mobile';
 const vec=p=>new Vector3(...p),sub=(a,b)=>a.map((n,i)=>n-b[i]),dot=(a,b)=>a.reduce((s,n,i)=>s+n*b[i],0);
 export function occupied(p,id,port){return (p.connections??[]).some(c=>[c.a,c.b].some(r=>r.id===id&&r.port===port));}
 export function attachment(p,id,port,kind,turn=0,length=1000){
@@ -65,4 +65,14 @@ export function nearbyJoin(p,id,maxDistance=150){
   try{joinExisting(p,a,b);best={a,b,distance};}catch{/* Outside the supported coordinate range. */}
  }
  return best;
+}
+
+export function attachmentTurns(p,id,port,kind,plane=null,length=1000){
+ const axis={XY:2,XZ:1,YZ:0}[plane],source=p.elements.find(e=>e.id===id);
+ if(!source)return [];
+ const level=endpoints(source)[port]?.[axis];
+ return [0,1,2,3].filter(turn=>{try{
+  const next=attachment(p,id,port,kind,turn,length);
+  return axis===undefined||endpoints(next).every(point=>Math.abs(point[axis]-level)<1e-5);
+ }catch{return false;}});
 }

@@ -1,8 +1,8 @@
-import {PPR_PARTS} from './ppr.js?v=2026-10-21';
-import {pprMesh} from './ppr-view.js?v=2026-10-21';
+import {PPR_PARTS} from './ppr.js?v=2026-10-21-mobile';
+import {pprMesh} from './ppr-view.js?v=2026-10-21-mobile';
 import * as T from 'three';
-import {OrbitControls} from '../vendor/OrbitControls.js?v=2026-10-21';
-import {endpoints,axisLength,cellCenter,cellPlacement,element,portName} from './model.js?v=2026-10-21';
+import {OrbitControls} from '../vendor/OrbitControls.js?v=2026-10-21-mobile';
+import {endpoints,axisLength,cellCenter,cellPlacement,planarPlacement,element,portName} from './model.js?v=2026-10-21-mobile';
 const V=p=>new T.Vector3(...p);
 function dispose(group){for(const child of [...group.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});group.remove(child);}}
 export class HydroView{
@@ -23,6 +23,10 @@ export class HydroView{
  }
  resize(){const w=this.host.clientWidth,h=this.host.clientHeight;if(!w||!h)return;this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.renderer.setSize(w,h);}
  cast(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,1-(e.clientY-r.top)/r.height*2);this.ray.setFromCamera(this.pointer,this.camera);}
+ placement(point){
+  if(this.viewMode&&this.viewMode!=='iso')return planarPlacement(this.tool,point,this.settings.grid,this.settings.plane,this.settings.level,this.libraryDiameter,this.libraryOutlet);
+  return {position:cellPlacement(this.tool,point,this.settings.grid,this.libraryDiameter,this.libraryOutlet),rotation:[0,0,0],center:cellCenter(point,this.settings.grid)};
+ }
  planePoint(level=this.settings.level){const axis={XZ:1,XY:2,YZ:0}[this.settings.plane],normal=new T.Vector3().setComponent(axis,1);const point=this.ray.ray.intersectPlane(new T.Plane(normal,-level),new T.Vector3());if(point)point.setComponent(axis,level);return point;}
  hit(){
   const direct=this.ray.intersectObjects(this.parts.children,true)[0];if(direct)return direct.object.userData.id;
@@ -45,10 +49,10 @@ export class HydroView{
  }
  move(e){if(this.press&&e.pointerId===this.press.pointer&&Math.hypot(e.clientX-this.press.x,e.clientY-this.press.y)>=6)this.press.moved=true;this.cast(e);if(this.drag){if(e.pointerId!==this.drag.pointer||Math.hypot(e.clientX-this.press.x,e.clientY-this.press.y)<3)return;const p=this.planePoint(this.drag.level);if(p){const delta=p.sub(this.drag.start).toArray();const axis={XZ:1,XY:2,YZ:0}[this.settings.plane];const pos=this.drag.origin.map((n,i)=>i===axis?n:Math.round((n+delta[i])/this.settings.step)*this.settings.step);this.cb.move(this.drag.id,pos);}return;}
   const id=this.hit();if(id){this.hoverElement(id);this.cb.cursor(this.enclosures.find(x=>x.id===id).box.getCenter(new T.Vector3()).toArray());return;}this.clearObjectHover();
-  const p=this.planePoint();this.hover.visible=!!p&&this.settings.mode!=='hidden';this.preview.visible=!!p&&!!this.tool;if(p){const size=this.settings.grid,center=cellCenter(p.toArray(),size);this.hover.scale.setScalar(size);this.hover.position.fromArray(center);this.preview.position.fromArray(cellPlacement(this.tool,p.toArray(),size,this.libraryDiameter,this.libraryOutlet));this.cb.cursor(center);}
+  const p=this.planePoint();this.hover.visible=!!p&&this.settings.mode!=='hidden';this.preview.visible=!!p&&!!this.tool;if(p){const size=this.settings.grid,placement=this.placement(p.toArray()),center=placement.center;this.hover.scale.setScalar(size);this.hover.position.fromArray(center);this.preview.position.fromArray(placement.position);this.preview.rotation.set(...placement.rotation.map(n=>n*Math.PI/180));this.cb.cursor(center);}
 
  }
- up(e){if(!this.press||e.pointerId!==this.press.pointer)return;if(Math.hypot(e.clientX-this.press.x,e.clientY-this.press.y)>=6)this.press.moved=true;if(this.drag){this.drag=null;this.cb.end();}else if(this.tool&&!this.press.moved){this.cast(e);const id=this.hit();if(id){this.cb.select(id);this.cb.endTool?.();}else{const p=this.planePoint();if(p){this.cb.add(this.tool,cellPlacement(this.tool,p.toArray(),this.settings.grid,this.libraryDiameter,this.libraryOutlet));}}}
+ up(e){if(!this.press||e.pointerId!==this.press.pointer)return;if(Math.hypot(e.clientX-this.press.x,e.clientY-this.press.y)>=6)this.press.moved=true;if(this.drag){this.drag=null;this.cb.end();}else if(this.tool&&!this.press.moved){this.cast(e);const id=this.hit();if(id){this.cb.select(id);this.cb.endTool?.();}else{const p=this.planePoint();if(p){const placement=this.placement(p.toArray());this.cb.add(this.tool,placement.position,placement.rotation);}}}
   else if(this.press.empty&&!this.press.moved){this.cast(e);if(!this.hit()){this.cb.select(null);this.clearObjectHover();}}
   this.press=null;this.controls.enabled=true;if(this.renderer.domElement.hasPointerCapture(e.pointerId))this.renderer.domElement.releasePointerCapture(e.pointerId);
  }
@@ -159,5 +163,6 @@ export class HydroView{
    }
   }
  }
- fit(view='iso',selectedOnly=false){const target=selectedOnly?this.parts.children.find(m=>m.userData.id===this.selected):this.parts;if(!target)return;const box=new T.Box3().setFromObject(target);if(!selectedOnly&&this.selection.children.length)box.union(new T.Box3().setFromObject(this.selection));const center=box.isEmpty()?new T.Vector3(0,500,0):box.getCenter(new T.Vector3()),size=box.isEmpty()?1200:Math.max(selectedOnly?100:300,box.getSize(new T.Vector3()).length());const distance=size/Math.sin(T.MathUtils.degToRad(20))*Math.max(1,1/this.camera.aspect)*.65;const direction={iso:[1,.8,1],front:[0,0,1],top:[0,1,.0001],side:[1,0,0]}[view];this.controls.target.copy(center);this.camera.position.copy(center).add(V(direction).normalize().multiplyScalar(distance));this.camera.lookAt(center);this.controls.update();}
+ setView(mode){this.viewMode=mode;this.controls.enableRotate=mode==='iso';this.fit(mode);}
+ fit(view=this.viewMode??'iso',selectedOnly=false){const target=selectedOnly?this.parts.children.find(m=>m.userData.id===this.selected):this.parts;if(!target)return;const box=new T.Box3().setFromObject(target);if(!selectedOnly&&this.selection.children.length)box.union(new T.Box3().setFromObject(this.selection));const center=box.isEmpty()?new T.Vector3(0,500,0):box.getCenter(new T.Vector3()),size=box.isEmpty()?1200:Math.max(selectedOnly?100:300,box.getSize(new T.Vector3()).length());const distance=size/Math.sin(T.MathUtils.degToRad(20))*Math.max(1,1/this.camera.aspect)*.65;const direction={iso:[1,.8,1],front:[0,0,1],top:[0,1,.0001],side:[1,0,0]}[view];const damping=this.controls.enableDamping;this.controls.enableDamping=false;this.controls.update();this.controls.target.copy(center);this.camera.position.copy(center).add(V(direction).normalize().multiplyScalar(distance));this.camera.lookAt(center);this.controls.update();this.controls.enableDamping=damping;}
 }

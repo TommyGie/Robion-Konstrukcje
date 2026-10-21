@@ -1,7 +1,7 @@
-import {PPR_PARTS,PPR_SIZES} from './ppr.js?v=2026-10-21';
-import {project,element,clone,validate,serialize,parse,endpoints,axisLength,ports,portName} from './model.js?v=2026-10-21';
-import {attachment,attach,occupied,editConnected,removeConnections,joinExisting,nearbyJoin,connectedIds} from './connections.js?v=2026-10-21';
-import {HydroView} from './view.js?v=2026-10-21';
+import {PPR_PARTS,PPR_SIZES} from './ppr.js?v=2026-10-21-mobile';
+import {project,element,clone,validate,serialize,parse,endpoints,axisLength,ports,portName} from './model.js?v=2026-10-21-mobile';
+import {attachment,attachmentTurns,attach,occupied,editConnected,removeConnections,joinExisting,nearbyJoin,connectedIds} from './connections.js?v=2026-10-21-mobile';
+import {HydroView} from './view.js?v=2026-10-21-mobile';
 const $=id=>document.getElementById(id),key='robion.hydro.v1';let model=project(),selected=null,undo=[],redo=[],dragBefore=null,tool=null,view,timer,draft=null,dragError=null,snapCandidate=null;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(timer);timer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
 try{const saved=localStorage.getItem(key);if(saved)model=parse(saved);}catch{toast('Nie udało się odczytać lokalnego zapisu. Możesz otworzyć plik projektu.');}
@@ -9,26 +9,44 @@ function persist(){try{localStorage.setItem(key,serialize(model));$('save-state'
 function commit(next,before=model){next=validate(next);if(JSON.stringify(next)===JSON.stringify(before))return;undo.push(clone(before));if(undo.length>80)undo.shift();redo=[];model=next;persist();render();}
 function act(fn){draft=null;try{const next=clone(model);fn(next);commit(editConnected(model,removeConnections(next),selected));}catch(e){toast(e.message);render();}}
 function choose(id){selected=id;draft=null;render();}
-function setTool(value){if(value){draft=null;view.showAttachment(null);}tool=value;view.setTool(value);document.querySelectorAll('[data-add]').forEach(b=>b.classList.toggle('active',b.dataset.add===value));$('select').classList.toggle('active',!value);$('hint').textContent=value?'Wskaż sześcian: podgląd pokazuje element w jego środku. Poziom wybiera warstwę. Kliknij, aby wstawić; Esc anuluje.':'Przeciągnij element na wybranej płaszczyźnie. Tło obraca widok; prawy przycisk przesuwa kamerę.';}
-function add(kind,pos){const e=element(kind,pos,Number($('ppr-size').value),Number($('ppr-outlet').value));selected=e.id;act(p=>p.elements.push(e));setTool(null);$('grid-mode').value='mist';view.settings.mode='mist';view.makeGrid();}
-function newDraft(e,port){return {port,kind:e.technical.family==='ppr'?(e.kind==='pipe'?'ppr-elbow':'ppr-pipe'):'elbow',turn:0,length:1000};}
+function setTool(value){if(value){draft=null;view.showAttachment(null);}tool=value;view.setTool(value);document.querySelectorAll('[data-add]').forEach(b=>b.classList.toggle('active',b.dataset.add===value));document.body.classList.toggle('placing',!!value);$('hint').textContent=value?'Wskaż sześcian: podgląd pokazuje element w jego środku. Poziom wybiera warstwę. Kliknij, aby wstawić; Esc anuluje.':'Przeciągnij element na wybranej płaszczyźnie. Tło obraca widok; prawy przycisk przesuwa kamerę.';}
+function add(kind,pos,rotation=[0,0,0]){const e=element(kind,pos,Number($('ppr-size').value),Number($('ppr-outlet').value));e.geometry.rotation=rotation;selected=e.id;act(p=>p.elements.push(e));setTool(null);$('grid-mode').value='mist';view.settings.mode='mist';view.makeGrid();}
+function newDraft(e,port){return {port,kind:null,turn:0,length:1000};}
+function connectionPlane(){return view.viewMode&&view.viewMode!=='iso'?view.settings.plane:null;}
+function connectionChoices(e){return (e.technical.family==='ppr'?Object.entries(PPR_PARTS).map(([key,p])=>[key,p.name]):[['pipe','Rura'],['elbow','Kolanko 90°']]).filter(([kind])=>attachmentTurns(model,e.id,draft.port,kind,connectionPlane()).length);}
+function refreshLibrary(){
+ const source=draft&&model.elements.find(e=>e.id===selected),joining=source&&draft.mode!=='existing';
+ const choices=joining?connectionChoices(source).map(([kind])=>kind):null;
+ document.querySelectorAll('[data-add]').forEach(b=>{b.disabled=joining?!choices.includes(b.dataset.add):b.dataset.add==='ppr-reducer'&&Number($('ppr-size').value)===20;});
+ $('ppr-size').disabled=!!joining;$('ppr-outlet').disabled=!!joining||Number($('ppr-size').value)===20;
+ $('library-connection').textContent=joining?`Dołącz do: ${source.name} · króciec ${portName(draft.port)}. Dostępne są zgodne części; średnica jest dobierana automatycznie.`:'';
+}
+function beginConnection(id,port){
+ selected=id;draft=newDraft(model.elements.find(e=>e.id===id),port);setTool(null);render();
+ $('library').classList.add('open');$('inspector').classList.remove('open');document.querySelector('.workspace').classList.remove('hide-library');refreshLibrary();
+}
+
 function connectionPanel(host,e){
  const section=document.createElement('section');section.className='connection-panel';host.append(section);
  const heading=document.createElement('strong');heading.textContent='Połączenia';section.append(heading);
  const portsRow=document.createElement('div');portsRow.className='editor-actions';section.append(portsRow);
- for(const port of ports(e).keys()){const used=occupied(model,e.id,port),b=document.createElement('button');b.textContent=`${portName(port)} · ${used?'połączony':'wybierz połączenie'}`;b.disabled=used;b.onclick=()=>{draft=newDraft(e,port);setTool(null);render();};portsRow.append(b);}
+ for(const port of ports(e).keys()){const used=occupied(model,e.id,port),b=document.createElement('button');b.textContent=`${portName(port)} · ${used?'połączony':'wybierz połączenie'}`;b.disabled=used;b.onclick=()=>{beginConnection(e.id,port);};portsRow.append(b);}
  const linked=model.connections.filter(c=>c.a.id===e.id||c.b.id===e.id);
  if(linked.length){const b=document.createElement('button');b.textContent='Odłącz połączenia tego elementu';b.onclick=()=>{draft=null;act(p=>p.connections=p.connections.filter(c=>c.a.id!==e.id&&c.b.id!==e.id));};section.append(b);}
  if(!draft)return;
  if(occupied(model,e.id,draft.port)){draft=null;return;}
  const modes=document.createElement('div');modes.className='editor-actions';section.append(modes);
- for(const [mode,label] of [['new','Nowa część'],['existing','Istniejąca część']]){const b=document.createElement('button');b.textContent=label;b.classList.toggle('active',(draft.mode??'new')===mode);b.onclick=()=>{draft={...newDraft(e,draft.port),mode,target:null};render();};modes.append(b);}
+ for(const [mode,label] of [['new','Nowa część'],['existing','Istniejąca część']]){const b=document.createElement('button');b.textContent=label;b.classList.toggle('active',(draft.mode??'new')===mode);b.onclick=()=>{if(mode==='new'){beginConnection(e.id,draft.port);return;}draft={...newDraft(e,draft.port),mode,target:null};render();};modes.append(b);}
  if(draft.mode==='existing'){existingPanel(section,e);return;}
+ if(!draft.kind){const hint=document.createElement('p');hint.textContent='Wybierz zgodną część w bibliotece.';section.append(hint);return;}
  const controls=document.createElement('div');controls.className='field-grid';section.append(controls);
  function select(label,options,value,change){const l=document.createElement('label');l.textContent=label;const input=document.createElement('select');input.setAttribute('aria-label',label);for(const [v,text] of options){const o=document.createElement('option');o.value=v;o.textContent=text;input.append(o);}input.value=value;input.onchange=()=>{change(input.value);render();};l.append(input);controls.append(l);}
- const options=e.technical.family==='ppr'?(e.kind==='pipe'?Object.entries(PPR_PARTS).filter(([key,p])=>p.kind!=='pipe'&&(p.kind!=='reducer'||ports(e)[draft.port].diameter>20)).map(([key,p])=>[key,p.name]):[['ppr-pipe','Rura PP-R']]):[['pipe','Rura'],['elbow','Kolanko 90°']];
+ const options=connectionChoices(e);
+ const turns=attachmentTurns(model,e.id,draft.port,draft.kind,connectionPlane(),draft.length);
+ if(!turns.length){view.showAttachment(null);const note=document.createElement('p');note.textContent='Ta część nie pasuje do króćca w wybranej płaszczyźnie. Wybierz inną część.';section.append(note);return;}
+ if(!turns.includes(draft.turn))draft.turn=turns[0];
  select('Dołącz',options,draft.kind,v=>draft.kind=v);
- if(!['pipe','ppr-pipe'].includes(draft.kind))select('Kierunek skrętu',[[0,'Kierunek 1'],[1,'Kierunek 2'],[2,'Kierunek 3'],[3,'Kierunek 4']],String(draft.turn),v=>draft.turn=Number(v));
+ if(!['pipe','ppr-pipe'].includes(draft.kind))select('Kierunek skrętu',turns.map((turn,i)=>[turn,'Kierunek '+(i+1)]),String(draft.turn),v=>draft.turn=Number(v));
  else{const l=document.createElement('label');l.textContent='Nowa rura [mm]';const input=document.createElement('input');input.type='number';input.min=1;input.max=100000;input.step=1;input.value=draft.length;input.setAttribute('aria-label','Nowa rura [mm]');input.oninput=()=>{if(!input.checkValidity()||!input.value){view.showAttachment(null);return;}draft.length=Number(input.value);try{view.showAttachment(attachment(model,e.id,draft.port,draft.kind,draft.turn,draft.length));}catch(error){view.showAttachment(null);toast(error.message);}};input.onchange=()=>{if(!input.checkValidity()||!input.value)toast('Podaj długość 1–100000 mm.');};l.append(input);controls.append(l);}
  try{view.showAttachment(attachment(model,e.id,draft.port,draft.kind,draft.turn,draft.length));}catch(error){toast(error.message);draft=null;return;}
  const note=document.createElement('p');note.className='hint';note.textContent='Zielony podgląd pokazuje nowe połączenie. Średnica jest dziedziczona z wybranego elementu.';section.append(note);
@@ -49,7 +67,7 @@ function existingPanel(section,e){
  const cancel=document.createElement('button');cancel.textContent='Anuluj';cancel.onclick=()=>{draft=null;render();};section.append(cancel);
 }
 function render(){
- $('project-name').value=model.name;$('count').textContent=`${model.elements.length} elementów`;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;view.update(model,selected);view.showAttachment(null);view.showJoin(null);
+ refreshLibrary();$('project-name').value=model.name;$('count').textContent=`${model.elements.length} elementów`;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;view.update(model,selected);view.showAttachment(null);view.showJoin(null);
  $('elements').replaceChildren();for(const e of model.elements){const b=document.createElement('button');b.textContent=e.name;b.classList.toggle('active',e.id===selected);b.onclick=()=>choose(e.id);$('elements').append(b);}
  const e=model.elements.find(e=>e.id===selected);const host=$('properties');host.replaceChildren();if(!e){host.innerHTML='<p class="hint">Wybierz element na scenie albo na liście. Współrzędne i wymiary pojawią się tutaj.</p>';return;}
  const title=document.createElement('p');title.className='selected-kind';title.textContent=e.technical.family==='ppr'?`${e.name} · wymiary orientacyjne`:e.kind==='pipe'?'RURA · SYMBOL UPROSZCZONY':'KOLANKO 90° · SYMBOL UPROSZCZONY';host.append(title);connectionPanel(host,e);
@@ -63,15 +81,39 @@ function render(){
  const info=document.createElement('div');info.className='endpoints';info.textContent=endpoints(e).map((p,i)=>`${portName(i)}: ${p.map(n=>n.toFixed(1)).join(' / ')} mm · Ø ${ports(e)[i].diameter}`).join('\n')+(e.technical.family==='ppr'?'\nPP-R ogólny · geometria poglądowa. Głębokości kielichów i grubości ścian nie są danymi montażowymi.':'');info.style.whiteSpace='pre-line';host.append(info);
  const actions=document.createElement('div');actions.className='editor-actions';for(const [label,fn] of [['Powiel',()=>{const copy=clone(e);copy.id=crypto.randomUUID();copy.geometry.position[2]+=100;selected=copy.id;act(p=>p.elements.push(copy));}],['Usuń',()=>{act(p=>p.elements=p.elements.filter(x=>x.id!==e.id));selected=null;render();}]]){const b=document.createElement('button');b.textContent=label;b.onclick=fn;actions.append(b);}host.append(actions);
 }
-try{view=new HydroView($('three'),$('labels'),{select:choose,port:(id,port)=>{selected=id;draft=newDraft(model.elements.find(e=>e.id===id),port);setTool(null);render();$('inspector').classList.add('open');document.querySelector('.workspace').classList.remove('hide-inspector');},endTool:()=>setTool(null),add,cursor:p=>$('cursor').textContent=p.map((n,i)=>`${'XYZ'[i]} ${Math.round(n)}`).join(' · ')+' mm',start:()=>{draft=null;dragError=null;snapCandidate=null;view.showAttachment(null);view.showJoin(null);dragBefore=clone(model);},move:(id,pos)=>{const next=clone(dragBefore??model);next.elements.find(e=>e.id===id).geometry.position=pos;try{model=editConnected(dragBefore??model,next,id);snapCandidate=nearbyJoin(model,id,Math.min(150,view.settings.grid*.6));const candidate=snapCandidate?joinExisting(model,snapCandidate.a,snapCandidate.b):null;view.update(candidate?.project??model,selected);view.showJoin(snapCandidate?endpoints(model.elements.find(e=>e.id===id))[snapCandidate.a.port]:null,snapCandidate?endpoints(model.elements.find(e=>e.id===snapCandidate.b.id))[snapCandidate.b.port]:null);$('hint').textContent=snapCandidate?'Dopasowane końce — puść element, aby przejrzeć i zatwierdzić połączenie.':'Przesuwaj element. Zbliż zgodne wolne końce, aby zobaczyć przyciąganie.';dragError=null;}catch(e){snapCandidate=null;view.showJoin(null);view.update(model,selected);dragError=e.message;}},end:()=>{const candidate=snapCandidate;snapCandidate=null;if(dragBefore){const next=clone(model);model=dragBefore;dragBefore=null;commit(next);}setTool(null);if(candidate){draft={mode:'existing',port:candidate.a.port,target:candidate.b};$('inspector').classList.add('open');document.querySelector('.workspace').classList.remove('hide-inspector');}render();if(dragError)toast(dragError);},cancel:()=>{snapCandidate=null;view.showJoin(null);if(dragBefore){model=dragBefore;dragBefore=null;render();}}});}catch(e){$('three').textContent='Nie udało się uruchomić 3D. Włącz WebGL w przeglądarce i odśwież stronę.';throw e;}
+try{view=new HydroView($('three'),$('labels'),{select:choose,port:beginConnection,endTool:()=>setTool(null),add,cursor:p=>$('cursor').textContent=p.map((n,i)=>`${'XYZ'[i]} ${Math.round(n)}`).join(' · ')+' mm',start:()=>{draft=null;dragError=null;snapCandidate=null;view.showAttachment(null);view.showJoin(null);dragBefore=clone(model);},move:(id,pos)=>{const next=clone(dragBefore??model);next.elements.find(e=>e.id===id).geometry.position=pos;try{model=editConnected(dragBefore??model,next,id);snapCandidate=nearbyJoin(model,id,Math.min(150,view.settings.grid*.6));const candidate=snapCandidate?joinExisting(model,snapCandidate.a,snapCandidate.b):null;view.update(candidate?.project??model,selected);view.showJoin(snapCandidate?endpoints(model.elements.find(e=>e.id===id))[snapCandidate.a.port]:null,snapCandidate?endpoints(model.elements.find(e=>e.id===snapCandidate.b.id))[snapCandidate.b.port]:null);$('hint').textContent=snapCandidate?'Dopasowane końce — puść element, aby przejrzeć i zatwierdzić połączenie.':'Przesuwaj element. Zbliż zgodne wolne końce, aby zobaczyć przyciąganie.';dragError=null;}catch(e){snapCandidate=null;view.showJoin(null);view.update(model,selected);dragError=e.message;}},end:()=>{const candidate=snapCandidate;snapCandidate=null;if(dragBefore){const next=clone(model);model=dragBefore;dragBefore=null;commit(next);}setTool(null);if(candidate){draft={mode:'existing',port:candidate.a.port,target:candidate.b};$('inspector').classList.add('open');document.querySelector('.workspace').classList.remove('hide-inspector');}render();if(dragError)toast(dragError);},cancel:()=>{snapCandidate=null;view.showJoin(null);if(dragBefore){model=dragBefore;dragBefore=null;render();}}});}catch(e){$('three').textContent='Nie udało się uruchomić 3D. Włącz WebGL w przeglądarce i odśwież stronę.';throw e;}
 $('project-name').onchange=e=>act(p=>p.name=e.target.value);
 for(const [key,part] of Object.entries(PPR_PARTS)){const button=document.createElement('button');button.dataset.add=key;const image=document.createElement('img');image.src=view.partThumbnail(key);image.alt='';const name=document.createElement('span');name.textContent=part.name;button.append(image,name);$('ppr-parts').append(button);}
 function librarySizes(){const d=Number($('ppr-size').value);$('ppr-outlet').replaceChildren();for(const n of PPR_SIZES.filter(n=>n<d)){const o=document.createElement('option');o.value=n;o.textContent=n+' mm';$('ppr-outlet').append(o);}$('ppr-outlet').disabled=d===20;document.querySelector('[data-add="ppr-reducer"]').disabled=d===20;view.libraryDiameter=d;view.libraryOutlet=Number($('ppr-outlet').value)||20;if(tool==='ppr-reducer'&&d===20)setTool(null);else if(tool)view.setTool(tool);}
 $('ppr-size').onchange=librarySizes;$('ppr-outlet').onchange=()=>{view.libraryOutlet=Number($('ppr-outlet').value);if(tool)view.setTool(tool);};librarySizes();
-for(const b of document.querySelectorAll('[data-add]'))b.onclick=()=>{setTool(b.dataset.add);view.settings.mode='edit';$('grid-mode').value='edit';view.makeGrid();if(innerWidth<=700)$('library').classList.remove('open');};
-$('select').onclick=()=>{draft=null;setTool(null);render();};
-for(const b of document.querySelectorAll('[data-view]'))b.onclick=()=>{view.fit(b.dataset.view);const plane={front:'XY',top:'XZ',side:'YZ'}[b.dataset.view];if(plane){$('plane').value=plane;view.settings.plane=plane;view.makeGrid();}};
-$('fit').onclick=()=>view.fit();$('focus-part').onclick=()=>view.fit('iso',true);
+for(const b of document.querySelectorAll('[data-add]'))b.onclick=()=>{if(draft&&draft.mode!=='existing'){draft.kind=b.dataset.add;draft.turn=0;$('library').classList.remove('open');document.querySelector('.workspace').classList.add('hide-library');$('inspector').classList.add('open');document.querySelector('.workspace').classList.remove('hide-inspector');render();return;}setTool(b.dataset.add);view.settings.mode='edit';$('grid-mode').value='edit';view.makeGrid();$('library').classList.remove('open');document.querySelector('.workspace').classList.add('hide-library');};
+for(const b of document.querySelectorAll('[data-dialog]'))b.onclick=()=>$(b.dataset.dialog).showModal();
+for(const b of document.querySelectorAll('[data-close-dialog]'))b.onclick=()=>b.closest('dialog').close();
+function updateViewButtons(){
+ const mode=view.viewMode??'iso';$('plane').disabled=mode!=='iso';
+ for(const b of document.querySelectorAll('[data-view]'))b.setAttribute('aria-pressed',String(b.dataset.view===mode));
+ const menu=document.querySelector('[data-dialog="view-options"]');
+ menu.textContent=({iso:'3D',front:'Przód',top:'Góra',side:'Bok'}[mode])+' ▾';menu.classList.toggle('active',mode!=='iso');
+}
+for(const b of document.querySelectorAll('[data-view]'))b.onclick=()=>{
+ const mode=b.dataset.view===view.viewMode?'iso':b.dataset.view;
+ $('view-options').close();view.setView(mode);updateViewButtons();
+ const plane={front:'XY',top:'XZ',side:'YZ'}[mode];if(plane){$('plane').value=plane;view.settings.plane=plane;view.makeGrid();}render();
+};
+updateViewButtons();
+$('fit').onclick=()=>{$('view-options').close();view.fit();};$('focus-part').onclick=()=>{$('view-options').close();view.fit(view.viewMode,true);};
+// Dismiss the library before a background gesture can insert or move a part.
+let libraryDismissPointer=null;
+document.addEventListener('pointerdown',e=>{
+ libraryDismissPointer=null;
+ const library=$('library'),workspace=document.querySelector('.workspace');
+ if(library.getBoundingClientRect().width===0||getComputedStyle(library).display==='none'||library.contains(e.target)||e.target.closest('[data-panel="library"]'))return;
+ if(innerWidth<=700&&!library.classList.contains('open'))return;
+ library.classList.remove('open');workspace.classList.add('hide-library');draft=null;setTool(null);render();
+ libraryDismissPointer=e.pointerId;e.preventDefault();e.stopImmediatePropagation();
+},true);
+document.addEventListener('pointerup',e=>{if(e.pointerId===libraryDismissPointer){e.preventDefault();e.stopImmediatePropagation();}},true);
+document.addEventListener('click',e=>{if(libraryDismissPointer!==null){libraryDismissPointer=null;e.preventDefault();e.stopImmediatePropagation();}},true);
 for(const b of document.querySelectorAll('[data-panel]'))b.onclick=()=>{const id=b.dataset.panel;if(innerWidth<=980&&(id==='inspector'||innerWidth<=700)){$(id).classList.toggle('open');document.querySelector('.workspace').classList.remove(`hide-${id}`);}else document.querySelector('.workspace').classList.toggle(`hide-${id}`);};
 for(const [id,prop] of [['grid-mode','mode'],['grid-size','grid'],['opacity','opacity'],['snap','step'],['plane','plane'],['level','level'],['dimensions','dimensions']])$(id).onchange=()=>{const input=$(id);if(!input.checkValidity()||input.value===''){toast('Wpisz poprawny poziom.');input.value=view.settings[prop];return;}view.settings[prop]=id==='dimensions'?input.checked:['grid-mode','plane'].includes(id)?input.value:Number(input.value)/(id==='opacity'?100:1);view.makeGrid();render();};
 function history(back){draft=null;const from=back?undo:redo,to=back?redo:undo;if(!from.length)return;to.push(clone(model));model=from.pop();selected=null;persist();render();}
@@ -80,5 +122,5 @@ $('new').onclick=()=>{if(model.elements.length&&!confirm('Utworzyć pusty projek
 $('demo').onclick=()=>{if(model.elements.length&&!confirm('Zastąpić projekt przykładem? Zmianę można cofnąć.'))return;const p=project();p.name='Przykład · rura i kolanko';const a=element('pipe',[-875,375,125]);a.geometry.length=1000;const b=element('elbow',[125,375,125]);b.geometry.radius=250;const c=element('pipe',[375,625,125]);c.geometry.rotation=[0,0,90];c.geometry.length=750;p.elements=[a,b,c];p.connections=[{a:{id:a.id,port:1},b:{id:b.id,port:0}},{a:{id:b.id,port:1},b:{id:c.id,port:0}}];draft=null;selected=b.id;commit(p);view.fit();};
 $('save').onclick=()=>{try{const blob=new Blob([serialize(model)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(model.name.replace(/[^\p{L}\p{N} _-]/gu,'').trim()||'projekt')+'.hydro.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);toast('Przekazano plik projektu do pobrania.');}catch(e){toast(e.message);}};
 $('open').onclick=()=>$('file').click();$('file').onchange=async()=>{const file=$('file').files[0];if(!file)return;try{if(file.size>5*1024*1024)throw Error('Plik jest zbyt duży (maksymalnie 5 MB).');const next=parse(await file.text());draft=null;selected=null;commit(next);view.fit();toast('Otworzono projekt. Poprzedni stan można przywrócić przez Cofnij.');}catch(e){toast(`Nie otwarto pliku: ${e.message}`);}finally{$('file').value='';}};
-window.addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==='Escape'){draft=null;view.showAttachment(null);view.cancel();setTool(null);render();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(!e.shiftKey);}if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();if(selected)act(p=>p.elements=p.elements.filter(x=>x.id!==selected));}if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)&&selected){e.preventDefault();const axes={XZ:[0,2],XY:[0,1],YZ:[2,1]}[view.settings.plane],axis=e.key.startsWith('Page')?1:e.key==='ArrowLeft'||e.key==='ArrowRight'?axes[0]:axes[1],sign=['ArrowLeft','ArrowDown','PageDown'].includes(e.key)?-1:1;act(p=>p.elements.find(x=>x.id===selected).geometry.position[axis]+=sign*view.settings.step*(e.shiftKey?10:1));}});
+window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==='Escape'){draft=null;view.showAttachment(null);view.cancel();setTool(null);render();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();history(!e.shiftKey);}if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();if(selected)act(p=>p.elements=p.elements.filter(x=>x.id!==selected));}if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)&&selected){e.preventDefault();const axes={XZ:[0,2],XY:[0,1],YZ:[2,1]}[view.settings.plane],axis=e.key.startsWith('Page')?1:e.key==='ArrowLeft'||e.key==='ArrowRight'?axes[0]:axes[1],sign=['ArrowLeft','ArrowDown','PageDown'].includes(e.key)?-1:1;act(p=>p.elements.find(x=>x.id===selected).geometry.position[axis]+=sign*view.settings.step*(e.shiftKey?10:1));}});
 render();view.fit();
