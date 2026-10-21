@@ -1,4 +1,4 @@
-import {MATERIALS} from './materials.js?v=2026-09-30';
+import {MATERIALS} from './materials.js?v=2026-10-21';
 // Schematic material symbols, not a declaration of drafting-standard compliance.
 const symbols={
  unknown:'<path d="M0 8H16"/>',

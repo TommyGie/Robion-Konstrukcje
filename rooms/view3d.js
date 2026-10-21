@@ -1,7 +1,7 @@
-import {material} from './materials.js?v=2026-09-30';
+import {material} from './materials.js?v=2026-10-21';
 import * as T from 'three';
-import {OrbitControls} from '../vendor/OrbitControls.js?v=2026-09-30';
-import {wallFrame,wallPoint,wallPieces,wallPolygon,wallLayerPolygons,doorGeometry,rad} from './model.js?v=2026-09-30';
+import {OrbitControls} from '../vendor/OrbitControls.js?v=2026-10-21';
+import {wallFrame,wallPoint,wallPieces,wallPolygon,wallLayerPolygons,doorGeometry,rad} from './model.js?v=2026-10-21';
 export class RoomView3D{
  constructor(host,onSelect){
   this.host=host;this.scene=new T.Scene();this.scene.background=new T.Color('#edf2f4');

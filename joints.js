@@ -1,5 +1,5 @@
-import * as THREE from './vendor/three.module.js?v=2026-09-30';
-import {PROFILES,normalizeCut,validateElement,length,normalizeJoint} from './model.js?v=2026-09-30';
+import * as THREE from './vendor/three.module.js?v=2026-10-21';
+import {PROFILES,normalizeCut,validateElement,length,normalizeJoint} from './model.js?v=2026-10-21';
 const v=a=>new THREE.Vector3(...a);
 const same=(a,b)=>v(a).distanceTo(v(b))<1e-6;
 export function sectionQuaternion(e){

@@ -1,6 +1,6 @@
-import {solveJoints} from './joints.js?v=2026-09-30';
-import {PROFILES,DEFAULTS,generate,bom,totals,length,validateElement,validateProject,stockLength} from './model.js?v=2026-09-30';
-import {Viewer} from './viewer.js?v=2026-09-30';
+import {solveJoints} from './joints.js?v=2026-10-21';
+import {PROFILES,DEFAULTS,generate,bom,totals,length,validateElement,validateProject,stockLength} from './model.js?v=2026-10-21';
+import {Viewer} from './viewer.js?v=2026-10-21';
 const $=id=>document.getElementById(id);
 let precision=1,liveEdit=null;
 const fmt=(n,d=precision)=>(Math.abs(n)<.5*10**-d?0:n).toLocaleString('pl-PL',{minimumFractionDigits:d,maximumFractionDigits:d}),inputNumber=n=>(Math.abs(n)<.5*10**-precision?0:n).toLocaleString('en-US',{useGrouping:false,minimumFractionDigits:precision,maximumFractionDigits:precision});

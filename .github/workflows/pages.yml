@@ -31,11 +31,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir _site
-          cp -R fonts rooms vendor _site/
+          cp -R fonts rooms hydro shared vendor _site/
           cp .nojekyll CNAME *.html *.js *.css *.png *.svg _site/
           test -s _site/index.html
           test -s _site/rooms.html
           test -s _site/joints.js
+          test -s _site/hydro.html
+          test -s _site/hydro/app.js
+          test -s _site/shared/banner.js
+          test -s _site/shared/baner.json
       - name: Wyslij pliki strony
         uses: actions/upload-pages-artifact@v3
         with:

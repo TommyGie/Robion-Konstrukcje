@@ -1,4 +1,4 @@
-import {validateWallLayers,layersOf} from './materials.js?v=2026-09-30';
+import {validateWallLayers,layersOf} from './materials.js?v=2026-10-21';
 // Plan geometry uses centimetres. x/y are floor coordinates; z is elevation.
 export const CATALOG = [
  {kind:'wardrobe',name:'Szafa',group:'Pokój',w:120,d:60,h:220,clear:90,color:'#c6b59c'},

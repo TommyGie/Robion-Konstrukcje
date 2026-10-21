@@ -1,6 +1,6 @@
-import {materialPatterns,materialKey} from './material-graphics.js?v=2026-09-30';
-import {MATERIALS,material,WALL_PRESETS,presetLayers,layersOf,wallQuantities,materialTotals} from './materials.js?v=2026-09-30';
-import {CATALOG,uid,rad,dist,wallLength,wallPoint,wallFrame,projectOnWall,rect,bodyPolygon,frontZone,wallPieces,wallPolygon,wallLayerPolygons,doorGeometry,makeFurniture,makeWall,blankPlan,rectangularPlan,demoPlan,validatePlan,analyse,nearestFrontGap,snapFurniture} from './model.js?v=2026-09-30';
+import {materialPatterns,materialKey} from './material-graphics.js?v=2026-10-21';
+import {MATERIALS,material,WALL_PRESETS,presetLayers,layersOf,wallQuantities,materialTotals} from './materials.js?v=2026-10-21';
+import {CATALOG,uid,rad,dist,wallLength,wallPoint,wallFrame,projectOnWall,rect,bodyPolygon,frontZone,wallPieces,wallPolygon,wallLayerPolygons,doorGeometry,makeFurniture,makeWall,blankPlan,rectangularPlan,demoPlan,validatePlan,analyse,nearestFrontGap,snapFurniture} from './model.js?v=2026-10-21';
 const $=id=>document.getElementById(id),clone=structuredClone,STORAGE='robion_rooms_v1';
 const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let project=demoPlan(),selected=null,tool='select',category='Wszystko',precision=1,magnet=true,gridStep=5,showDimensions=true,showZones=true,mode='2d',view3d=null,issues=[],pendingPoint=null,previewPoint=null,drag=null,edit=null,tab='properties',stored=true;
@@ -166,7 +166,7 @@ $('plan').addEventListener('pointerup',endDrag);$('plan').addEventListener('poin
 $('plan').addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.1:.9,point(e));},{passive:false});
 async function setView(next){finishEdit();mode=next;pendingPoint=null;previewPoint=null;$('plan').toggleAttribute('hidden',next==='3d');$('three').hidden=next!=='3d';$('low-wall-label').hidden=next!=='3d';$('view-2d').classList.toggle('active',next==='2d');$('view-3d').classList.toggle('active',next==='3d');syncTools();
  if(next==='3d'){
-  if(!view3d){try{const {RoomView3D}=await import('./view3d.js?v=2026-09-30');if(view3d||mode!=='3d')return;$('three').replaceChildren();view3d=new RoomView3D($('three'),id=>{select(id);showTab('properties');});view3d.update(project,selected,issues,{lowWalls:$('low-walls').checked,zones:showZones});view3d.fit();}catch(error){$('three').innerHTML='<p id="three-error">Podgląd 3D nie mógł się uruchomić. Rzut 2D, edycja i zapis pozostają dostępne. Sprawdź obsługę WebGL w przeglądarce.</p>';console.error(error);}}
+  if(!view3d){try{const {RoomView3D}=await import('./view3d.js?v=2026-10-21');if(view3d||mode!=='3d')return;$('three').replaceChildren();view3d=new RoomView3D($('three'),id=>{select(id);showTab('properties');});view3d.update(project,selected,issues,{lowWalls:$('low-walls').checked,zones:showZones});view3d.fit();}catch(error){$('three').innerHTML='<p id="three-error">Podgląd 3D nie mógł się uruchomić. Rzut 2D, edycja i zapis pozostają dostępne. Sprawdź obsługę WebGL w przeglądarce.</p>';console.error(error);}}
   else{view3d.resize();view3d.update(project,selected,issues,{lowWalls:$('low-walls').checked,zones:showZones});}
  }else {applyView();draw();}
 }

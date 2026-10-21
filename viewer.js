@@ -1,8 +1,8 @@
-import {sectionQuaternion,solveJoints} from './joints.js?v=2026-09-30';
+import {sectionQuaternion,solveJoints} from './joints.js?v=2026-10-21';
 import * as THREE from 'three';
-import {OrbitControls} from './vendor/OrbitControls.js?v=2026-09-30';
-import {PROFILES,length,cutSlopes} from './model.js?v=2026-09-30';
-import {magneticTranslation} from './snap.js?v=2026-09-30';
+import {OrbitControls} from './vendor/OrbitControls.js?v=2026-10-21';
+import {PROFILES,length,cutSlopes} from './model.js?v=2026-10-21';
+import {magneticTranslation} from './snap.js?v=2026-10-21';
 export class Viewer {
  constructor(el,onSelect,actions={}){
   this.el=el;this.onSelect=onSelect;this.actions=actions;this.mode='select';this.currentView='front';this.snap=.1;this.magnet=true;this.precision=1;this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#f0f1f3');
