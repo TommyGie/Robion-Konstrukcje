@@ -21,3 +21,6 @@ dialog{color:var(--ink);background:#f8fbfd;border:1px solid #dbe4ea;border-radiu
 @media(max-width:700px){.app-header{display:grid;grid-template-columns:minmax(0,1fr) auto}.app-header .brand{grid-column:1;grid-row:1}.app-header .mode-switch{grid-column:2;grid-row:1}.app-header .project-title{grid-column:1;grid-row:2;min-width:0}.app-header .file-actions{grid-column:2;grid-row:2;justify-content:flex-end}}
 
 .view-options button[aria-pressed="true"],.toolbar [data-dialog="view-options"].active{background:#fff0d4;border-color:#d99b39;color:#825314;box-shadow:inset 0 0 0 1px #d99b39}
+
+.ppr-library[hidden]{display:none}#brass-parts button{display:flex;flex-direction:column;align-items:center;gap:2px}#brass-parts img{width:100%;height:54px;object-fit:contain}#brass-parts span{font-size:11px}#brass-library{flex-shrink:0}
+#pex-parts button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}#pex-parts img{width:100%;height:54px;object-fit:contain}#pex-parts span{font-size:11px}#pex-library{flex-shrink:0}

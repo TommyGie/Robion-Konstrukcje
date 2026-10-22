@@ -1,18 +1,31 @@
-import {Vector3,Matrix4,Euler} from '../vendor/three.module.js?v=2026-10-21-mobile';
-import {clone,element,endpoints,portDirection,ports,portCompatibility,validate} from './model.js?v=2026-10-21-mobile';
+import {retailAllowed} from './retail.js';
+import {PEX_PARTS,PEX_SIZES,pexThreads,pexOutlets,pexMarketThreads,pexMarketOutlets,pexMarketAvailable} from './pex.js';
+import {BRASS_PARTS,brassOutlets} from './brass.js';
+import {PPR_PARTS,PPR_SIZES,threadSizes} from './ppr.js';
+import {Vector3,Matrix4,Euler,Quaternion} from '../vendor/three.module.js';
+import {clone,element,endpoints,portDirection,ports,portCompatibility,validate} from './model.js';
 const vec=p=>new Vector3(...p),sub=(a,b)=>a.map((n,i)=>n-b[i]),dot=(a,b)=>a.reduce((s,n,i)=>s+n*b[i],0);
 export function occupied(p,id,port){return (p.connections??[]).some(c=>[c.a,c.b].some(r=>r.id===id&&r.port===port));}
-export function attachment(p,id,port,kind,turn=0,length=1000){
+export function attachment(p,id,port,kind,turn=0,length=1000,threadSize,outletThread){
  const source=p.elements.find(e=>e.id===id);if(!source)throw Error('Wybierz element.');if(occupied(p,id,port))throw Error('Ten koniec jest już połączony.');
- const d=ports(source)[port].diameter;const next=element(kind,endpoints(source)[port],d,d>20?({25:20,32:25,40:32,50:40,63:50}[d]):20);if(source.technical.family==='generic'){next.technical=clone(source.technical);next.geometry.radius=Math.max(100,next.technical.outerDiameter);}next.geometry.length=length;
- const problem=portCompatibility(source,port,next,0);if(problem)throw Error(problem);
+ const sourcePort=ports(source)[port];let next;
+ if(PEX_PARTS[kind]){const d=sourcePort.threadSize?PEX_SIZES.find(n=>pexMarketThreads(kind,n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia PEX.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:pexMarketOutlets(d).at(-1),sourcePort.threadSize??threadSize??pexMarketThreads(kind,d)[0]);if(!pexMarketAvailable(kind,d,next.technical.outletDiameter,next.technical.threadSize))throw Error('Wybierz inny rozmiar części.');if(next.kind==='pipe')next.geometry.length=length;}
+ else if(BRASS_PARTS[kind]){if(!sourcePort.threadSize)throw Error('Mosiądz wymaga przyłącza gwintowanego.');next=element(kind,[0,0,0],sourcePort.threadSize,outletThread??brassOutlets(sourcePort.threadSize).at(-1));}
+ else {let d=sourcePort.type.startsWith('thread')?source.technical.outerDiameter:sourcePort.diameter;
+ if(sourcePort.threadSize&&PPR_PARTS[kind])d=PPR_SIZES.find(size=>threadSizes(kind,size).includes(sourcePort.threadSize)&&retailAllowed(kind,size,sourcePort.threadSize));
+ if(d===undefined)throw Error('Brak zgodnego przejścia PP-R.');
+ next=element(kind,[0,0,0],d,d>20?({25:20,32:25,40:32,50:40,63:50}[d]):20,sourcePort.threadSize??threadSize??threadSizes(kind,d).find(t=>retailAllowed(kind,d,t)));if(source.technical.family==='generic'){next.technical=clone(source.technical);next.geometry.radius=Math.max(100,next.technical.outerDiameter);}next.geometry.length=length;}
+
+ if(!retailAllowed(kind,next.technical.family==='brass'?next.technical.threadSize:next.technical.outerDiameter,next.technical.threadSize))throw Error('Wybierz inny rozmiar części.');
+ const target=ports(next).findIndex((_,i)=>!portCompatibility(source,port,next,i));if(target<0)throw Error(portCompatibility(source,port,next,0));
  const x=vec(portDirection(source,port));let y=vec(portDirection(source,port===0&&ports(source).length>1?1:0));
  if(Math.abs(x.dot(y))>.99)y=Math.abs(x.y)<.9?new Vector3(0,1,0):new Vector3(0,0,1);
  y.addScaledVector(x,-y.dot(x)).normalize().applyAxisAngle(x,turn*Math.PI/2);
- const z=x.clone().cross(y).normalize(),euler=new Euler().setFromRotationMatrix(new Matrix4().makeBasis(x,y,z),'XYZ');next.geometry.rotation=[euler.x,euler.y,euler.z].map(n=>Math.round(n*180/Math.PI*1e9)/1e9);
- const result=clone(p);result.elements.push(next);result.connections??=[];result.connections.push({a:{id,port},b:{id:next.id,port:0}});validate(result);return next;
+ const z=x.clone().cross(y).normalize(),euler=new Euler().setFromRotationMatrix(new Matrix4().makeBasis(x,y,z).multiply(new Matrix4().makeRotationFromQuaternion(new Quaternion().setFromUnitVectors(vec(portDirection(next,target)),new Vector3(-1,0,0)))),'XYZ');next.geometry.rotation=[euler.x,euler.y,euler.z].map(n=>Math.round(n*180/Math.PI*1e9)/1e9||0);
+ const offset=endpoints(next)[target];next.geometry.position=endpoints(source)[port].map((n,i)=>n-offset[i]);
+ const result=clone(p);result.elements.push(next);result.connections??=[];result.connections.push({a:{id,port},b:{id:next.id,port:target}});validate(result);return next;
 }
-export function attach(p,id,port,kind,turn,length){const next=attachment(p,id,port,kind,turn,length),result=clone(p);result.elements.push(next);result.connections??=[];result.connections.push({a:{id,port},b:{id:next.id,port:0}});return {project:validate(result),id:next.id};}
+export function attach(p,id,port,kind,turn,length,threadSize,outletThread){const next=attachment(p,id,port,kind,turn,length,threadSize,outletThread),result=clone(p);const source=p.elements.find(e=>e.id===id),target=ports(next).findIndex((_,i)=>!portCompatibility(source,port,next,i)&&Math.hypot(...endpoints(next)[i].map((n,j)=>n-endpoints(source)[port][j]))<1e-4);result.elements.push(next);result.connections??=[];result.connections.push({a:{id,port},b:{id:next.id,port:target}});return {project:validate(result),id:next.id};}
 export function removeConnections(p){const ids=new Set(p.elements.map(e=>e.id));p.connections=(p.connections??[]).filter(c=>ids.has(c.a.id)&&ids.has(c.b.id));return p;}
 export function editConnected(before,next,id){
  removeConnections(next);const old=before.elements.find(e=>e.id===id),edited=next.elements.find(e=>e.id===id);if(!old||!edited)return validate(next);
@@ -42,7 +55,7 @@ export function joinProblem(p,a,b){
  if(occupied(p,a.id,a.port)||occupied(p,b.id,b.port))return 'Wybrany koniec jest już połączony.';
  if(connectedIds(p,a.id).has(b.id))return 'Te elementy należą już do jednego układu. Zamykanie pętli nie jest jeszcze obsługiwane.';
  const problem=portCompatibility(x,a.port,y,b.port);if(problem)return problem;
- if(x.technical.material!==y.technical.material||x.technical.connection!==y.technical.connection)return 'Końce mają różne materiały lub technologie przyłączenia.';
+ if(x.technical.family!=='pex'&&!ports(x)[a.port].type.startsWith('thread')&&(x.technical.material!==y.technical.material||x.technical.connection!==y.technical.connection))return 'Końce mają różne materiały lub technologie przyłączenia.';
  if(Math.hypot(...portDirection(x,a.port).map((n,i)=>n+portDirection(y,b.port)[i]))>1e-4)return 'Końce nie są skierowane przeciwnie. Obróć element przed połączeniem.';
  return null;
 }

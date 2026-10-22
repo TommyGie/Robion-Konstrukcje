@@ -1,6 +1,7 @@
-import {fittingGeometry} from './ppr-solid.js?v=2026-10-21';
-import * as T from '../vendor/three.module.js?v=2026-10-21';
-import {pprPorts} from './ppr.js?v=2026-10-21';
+import {brassMaterial} from './brass-material.js';
+import {fittingGeometry} from './ppr-solid.js';
+import * as T from '../vendor/three.module.js';
+import {pprPorts,PPR_PARTS} from './ppr.js';
 const V=p=>new T.Vector3(...p);
 // Hollow sockets and pipe walls are visual approximations; no PN/SDR is implied.
 export function pprMesh(e,selected=false,preview=false){
@@ -16,13 +17,21 @@ export function pprMesh(e,selected=false,preview=false){
  }else{
   const q=e.technical.outletDiameter/d,L=ps[1]?.point[0]/d;
   const lathe=profile=>{const mesh=add(new T.LatheGeometry(profile.map(([r,x])=>new T.Vector2(r*d,x*d)),64));mesh.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),new T.Vector3(1,0,0));return mesh;};
-  if(['coupling','reducer','valve'].includes(e.kind)){
+  if(['coupling','reducer','valve'].includes(e.kind)&&!PPR_PARTS[e.technical.catalogId]?.thread){
    const length=L+.6*q,outer=e.kind==='valve'?[[.72,-.6],[.72,-.08],[.73,.15],[.86,L*.35],[.88,L*.5],[.86,L*.65],[.73,L-.15],[.72,L+.08],[.72,length-.025]]:e.kind==='reducer'?[[.72,-.6],[.72,L*.32],[.72*q,L*.72],[.72*q,length-.025]]:[[.72,-.6],[.72,length-.025]];
    lathe([[.51,-.6],[.69,-.6],[.72,-.575],...outer.slice(1),[.7*q,length],[.51*q,length],[.5*q,length-.02],[.5*q,L],[.34*q,L-.02],[.34,.02],[.5,0],[.5,-.58],[.51,-.6]]);
   }else if(e.kind==='cap')lathe([[.51,-.6],[.69,-.6],[.72,-.57],[.72,.06],[.70,.14],[.63,.21],[.5,.25],[0,.27],[0,.035],[.46,.035],[.5,0],[.5,-.58],[.51,-.6]]);
   else{
    add(fittingGeometry(e));
-   for(const p of ps){const h=p.insertion,r=p.diameter;const profile=[[.72*r,h-.3*d],[.72*r,h-.025*r],[.71*r,h-.008*r],[.695*r,h],[.51*r,h],[.5*r,h-.02*r],[.5*r,h-.3*d]].map(v=>new T.Vector2(...v));const rim=add(new T.LatheGeometry(profile,64),p.point);rim.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),V(p.direction));}
+   for(const p of ps){if(p.type!=='socket'){
+ const r=p.diameter,thread=p.type.startsWith('thread'),outer=r*.5,inner=r*(p.type==='thread-female'?.43:.34);
+ const start=thread?-d*.55:-d*.25;
+ const profile=[[inner,start],[outer,start],[outer,0],[inner,0],[inner,start]].map(v=>new T.Vector2(...v));
+ const end=add(new T.LatheGeometry(profile,48),p.point);end.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),V(p.direction));
+ if(thread){end.material.dispose();end.material=brassMaterial(selected,preview);
+ const helix=new T.Curve();helix.getPoint=t=>new T.Vector3((p.type==='thread-female'?inner:outer)*Math.cos(t*Math.PI*12),start+t*(-start-.8),(p.type==='thread-female'?inner:outer)*Math.sin(t*Math.PI*12));
+ const ridge=add(new T.TubeGeometry(helix,144,.45,6,false),p.point);ridge.quaternion.copy(end.quaternion);ridge.material.copy(end.material);}
+ continue;}const h=p.insertion,r=p.diameter;const profile=[[.72*r,h-.3*d],[.72*r,h-.025*r],[.71*r,h-.008*r],[.695*r,h],[.51*r,h],[.5*r,h-.02*r],[.5*r,h-.3*d]].map(v=>new T.Vector2(...v));const rim=add(new T.LatheGeometry(profile,64),p.point);rim.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),V(p.direction));}
   }
   if(e.kind==='valve'){
    const center=ps[1].point[0]/2;cylinder([center,d*.55,0],[center,d*1.12,0],d*.2);
