@@ -1,3 +1,4 @@
+import {IRON_PARTS,ironOutlets} from './iron.js';
 import {STEEL_PARTS,STEEL_SIZES,steelData,steelPorts,steelOutlets,steelThreads} from './steel.js';
 import {PRESS_PARTS,PRESS_SIZES,pressData,pressPorts,pressOutlets,pressThreads} from './press.js';
 import {COPPER_PARTS,COPPER_SIZES,copperData,copperPorts,copperOutlets,copperThreads} from './copper.js';
@@ -16,6 +17,7 @@ export function attachment(p,id,port,kind,turn=0,length=1000,threadSize,outletTh
  else if(PRESS_PARTS[kind]){const d=sourcePort.threadSize?PRESS_SIZES.find(n=>PRESS_PARTS[kind].thread&&pressThreads(n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia Cu.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:pressOutlets(d).at(-1),sourcePort.threadSize??threadSize);if(next.kind==='pipe')next.geometry.length=length;}
  else if(COPPER_PARTS[kind]){const d=sourcePort.threadSize?COPPER_SIZES.find(n=>COPPER_PARTS[kind].thread&&copperThreads(n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia Cu.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:copperOutlets(d).at(-1),sourcePort.threadSize??threadSize);if(next.kind==='pipe')next.geometry.length=length;}
  else if(PEX_PARTS[kind]){const d=sourcePort.threadSize?PEX_SIZES.find(n=>pexMarketThreads(kind,n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia PEX.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:pexMarketOutlets(d).at(-1),sourcePort.threadSize??threadSize??pexMarketThreads(kind,d)[0]);if(!pexMarketAvailable(kind,d,next.technical.outletDiameter,next.technical.threadSize))throw Error('Wybierz inny rozmiar części.');if(next.kind==='pipe')next.geometry.length=length;}
+ else if(IRON_PARTS[kind]){if(!sourcePort.threadSize)throw Error('Ta część wymaga przyłącza gwintowanego.');next=element(kind,[0,0,0],sourcePort.threadSize,outletThread??ironOutlets(sourcePort.threadSize).at(-1));if(next.kind==='pipe')next.geometry.length=length;}
  else if(BRASS_PARTS[kind]){if(!sourcePort.threadSize)throw Error('Mosiądz wymaga przyłącza gwintowanego.');next=element(kind,[0,0,0],sourcePort.threadSize,outletThread??brassOutlets(sourcePort.threadSize).at(-1));}
  else {let d=sourcePort.type.startsWith('thread')?source.technical.outerDiameter:sourcePort.diameter;
  if(sourcePort.threadSize&&PPR_PARTS[kind])d=PPR_SIZES.find(size=>threadSizes(kind,size).includes(sourcePort.threadSize)&&retailAllowed(kind,size,sourcePort.threadSize));

@@ -28,3 +28,4 @@ dialog{color:var(--ink);background:#f8fbfd;border:1px solid #dbe4ea;border-radiu
 #copper-parts button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}#copper-parts img{width:100%;height:54px;object-fit:contain}#copper-parts span{font-size:11px}#pex-library{flex-shrink:0}
 #press-parts button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}#press-parts img{width:100%;height:54px;object-fit:contain}#press-parts span{font-size:11px}#pex-library{flex-shrink:0}
 #steel-parts button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}#steel-parts img{width:100%;height:54px;object-fit:contain}#steel-parts span{font-size:11px}#pex-library{flex-shrink:0}
+#iron-parts button{display:flex;align-items:center;gap:8px;text-align:left}#iron-parts button[hidden]{display:none}#iron-parts img{width:64px;height:64px;object-fit:contain}
