@@ -1,3 +1,9 @@
+import {steelMesh} from './steel-view.js';
+import {STEEL_PARTS,STEEL_SIZES,steelData,steelPorts,steelOutlets,steelThreads} from './steel.js';
+import {pressMesh} from './press-view.js';
+import {PRESS_PARTS,PRESS_SIZES,pressData,pressPorts,pressOutlets,pressThreads} from './press.js';
+import {copperMesh} from './copper-view.js';
+import {COPPER_PARTS,COPPER_SIZES,copperData,copperPorts,copperOutlets,copperThreads} from './copper.js';
 import {layoutCallouts} from './callouts.js';
 import {PEX_PARTS} from './pex.js';
 import {pexMesh} from './pex-view.js';
@@ -8,7 +14,7 @@ import {pprMesh} from './ppr-view.js';
 import * as T from 'three';
 import {OrbitControls} from '../vendor/OrbitControls.js';
 import {endpoints,axisLength,cellCenter,cellPlacement,planarPlacement,element,portName} from './model.js';
-const catalogMesh=(e,...args)=>e.technical.family==='pex'?pexMesh(e,...args):e.technical.family==='brass'?brassMesh(e,...args):pprMesh(e,...args);
+const catalogMesh=(e,...args)=>e.technical.family==='steel'?steelMesh(e,...args):e.technical.family==='press'?pressMesh(e,...args):e.technical.family==='copper'?copperMesh(e,...args):e.technical.family==='pex'?pexMesh(e,...args):e.technical.family==='brass'?brassMesh(e,...args):pprMesh(e,...args);
 const V=p=>new T.Vector3(...p);
 function dispose(group){for(const child of [...group.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});group.remove(child);}}
 export class HydroView{
@@ -30,8 +36,8 @@ export class HydroView{
  resize(){const w=this.host.clientWidth,h=this.host.clientHeight;if(!w||!h)return;this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.renderer.setSize(w,h);}
  cast(e){const r=this.host.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,1-(e.clientY-r.top)/r.height*2);this.ray.setFromCamera(this.pointer,this.camera);}
  placement(point){
-  if(this.viewMode&&this.viewMode!=='iso')return planarPlacement(this.tool,point,this.settings.grid,this.settings.plane,this.settings.level,BRASS_PARTS[this.tool]?this.libraryBrassSize:PEX_PARTS[this.tool]?this.libraryPexSize:this.libraryDiameter,BRASS_PARTS[this.tool]?this.libraryBrassOutlet:PEX_PARTS[this.tool]?this.libraryPexOutlet:this.libraryOutlet);
-  return {position:cellPlacement(this.tool,point,this.settings.grid,BRASS_PARTS[this.tool]?this.libraryBrassSize:PEX_PARTS[this.tool]?this.libraryPexSize:this.libraryDiameter,BRASS_PARTS[this.tool]?this.libraryBrassOutlet:PEX_PARTS[this.tool]?this.libraryPexOutlet:this.libraryOutlet),rotation:[0,0,0],center:cellCenter(point,this.settings.grid)};
+  if(this.viewMode&&this.viewMode!=='iso')return planarPlacement(this.tool,point,this.settings.grid,this.settings.plane,this.settings.level,BRASS_PARTS[this.tool]?this.libraryBrassSize:STEEL_PARTS[this.tool]?this.librarySteelSize:PRESS_PARTS[this.tool]?this.libraryPressSize:COPPER_PARTS[this.tool]?this.libraryCopperSize:PEX_PARTS[this.tool]?this.libraryPexSize:this.libraryDiameter,BRASS_PARTS[this.tool]?this.libraryBrassOutlet:STEEL_PARTS[this.tool]?this.librarySteelOutlet:PRESS_PARTS[this.tool]?this.libraryPressOutlet:COPPER_PARTS[this.tool]?this.libraryCopperOutlet:PEX_PARTS[this.tool]?this.libraryPexOutlet:this.libraryOutlet);
+  return {position:cellPlacement(this.tool,point,this.settings.grid,BRASS_PARTS[this.tool]?this.libraryBrassSize:STEEL_PARTS[this.tool]?this.librarySteelSize:PRESS_PARTS[this.tool]?this.libraryPressSize:COPPER_PARTS[this.tool]?this.libraryCopperSize:PEX_PARTS[this.tool]?this.libraryPexSize:this.libraryDiameter,BRASS_PARTS[this.tool]?this.libraryBrassOutlet:STEEL_PARTS[this.tool]?this.librarySteelOutlet:PRESS_PARTS[this.tool]?this.libraryPressOutlet:COPPER_PARTS[this.tool]?this.libraryCopperOutlet:PEX_PARTS[this.tool]?this.libraryPexOutlet:this.libraryOutlet),rotation:[0,0,0],center:cellCenter(point,this.settings.grid)};
  }
  planePoint(level=this.settings.level){const axis={XZ:1,XY:2,YZ:0}[this.settings.plane],normal=new T.Vector3().setComponent(axis,1);const point=this.ray.ray.intersectPlane(new T.Plane(normal,-level),new T.Vector3());if(point)point.setComponent(axis,level);return point;}
  hit(){
@@ -63,7 +69,7 @@ export class HydroView{
   this.press=null;this.controls.enabled=true;if(this.renderer.domElement.hasPointerCapture(e.pointerId))this.renderer.domElement.releasePointerCapture(e.pointerId);
  }
  cancel(){if(this.drag){this.drag=null;this.cb.cancel();}this.press=null;this.controls.enabled=true;}
- setTool(tool){this.tool=tool;dispose(this.preview);this.preview.visible=false;if(tool&&(PPR_PARTS[tool]||BRASS_PARTS[tool]||PEX_PARTS[tool])){const e=element(tool,[0,0,0],BRASS_PARTS[this.tool]?this.libraryBrassSize:PEX_PARTS[this.tool]?this.libraryPexSize:this.libraryDiameter,BRASS_PARTS[this.tool]?this.libraryBrassOutlet:PEX_PARTS[this.tool]?this.libraryPexOutlet:this.libraryOutlet,PEX_PARTS[this.tool]?this.libraryPexThread:this.libraryThread);this.preview.add(catalogMesh(e,false,true));this.renderer.domElement.style.cursor='crosshair';return;}if(tool){let curve;if(tool==='pipe')curve=new T.LineCurve3(new T.Vector3(),new T.Vector3(1000,0,0));else{curve=new T.Curve();curve.getPoint=t=>new T.Vector3(100*Math.sin(t*Math.PI/2),100*(1-Math.cos(t*Math.PI/2)),0);}const mesh=new T.Mesh(new T.TubeGeometry(curve,tool==='pipe'?1:32,16,16,false),new T.MeshStandardMaterial({color:0xb87c20,transparent:true,opacity:.65,depthWrite:false}));this.preview.add(mesh);}this.renderer.domElement.style.cursor=tool?'crosshair':'auto';}
+ setTool(tool){this.tool=tool;dispose(this.preview);this.preview.visible=false;if(tool&&(PPR_PARTS[tool]||BRASS_PARTS[tool]||PEX_PARTS[tool]||COPPER_PARTS[tool]||PRESS_PARTS[tool]||STEEL_PARTS[tool])){const e=element(tool,[0,0,0],BRASS_PARTS[this.tool]?this.libraryBrassSize:STEEL_PARTS[this.tool]?this.librarySteelSize:PRESS_PARTS[this.tool]?this.libraryPressSize:COPPER_PARTS[this.tool]?this.libraryCopperSize:PEX_PARTS[this.tool]?this.libraryPexSize:this.libraryDiameter,BRASS_PARTS[this.tool]?this.libraryBrassOutlet:STEEL_PARTS[this.tool]?this.librarySteelOutlet:PRESS_PARTS[this.tool]?this.libraryPressOutlet:COPPER_PARTS[this.tool]?this.libraryCopperOutlet:PEX_PARTS[this.tool]?this.libraryPexOutlet:this.libraryOutlet,STEEL_PARTS[this.tool]?this.librarySteelThread:PRESS_PARTS[this.tool]?this.libraryPressThread:COPPER_PARTS[this.tool]?this.libraryCopperThread:PEX_PARTS[this.tool]?this.libraryPexThread:this.libraryThread);this.preview.add(catalogMesh(e,false,true));this.renderer.domElement.style.cursor='crosshair';return;}if(tool){let curve;if(tool==='pipe')curve=new T.LineCurve3(new T.Vector3(),new T.Vector3(1000,0,0));else{curve=new T.Curve();curve.getPoint=t=>new T.Vector3(100*Math.sin(t*Math.PI/2),100*(1-Math.cos(t*Math.PI/2)),0);}const mesh=new T.Mesh(new T.TubeGeometry(curve,tool==='pipe'?1:32,16,16,false),new T.MeshStandardMaterial({color:0xb87c20,transparent:true,opacity:.65,depthWrite:false}));this.preview.add(mesh);}this.renderer.domElement.style.cursor=tool?'crosshair':'auto';}
  makeGrid(){dispose(this.grid);const {grid:s,mode,opacity}=this.settings;this.grid.visible=mode!=='hidden';this.floor.visible=this.ground.visible=mode!=='hidden';const points=[];const half=1000;for(let a=-half;a<=half;a+=s)for(let b=-half;b<=half;b+=s){points.push(-half,a+half,b,half,a+half,b,a,0,b,a,2*half,b,a,b+half,-half,a,b+half,half);}
   const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(points,3));this.grid.add(new T.LineSegments(geom,new T.LineBasicMaterial({color:0x849ba8,transparent:true,opacity:opacity*(mode==='edit'?.10:.025),depthWrite:false})));this.hover.visible=false;
   // A clearly readable layer of translucent cells gives a front/back reference.
@@ -97,7 +103,7 @@ export class HydroView{
  partThumbnail(key){
   if(!this.thumbRenderer){this.thumbRenderer=new T.WebGLRenderer({antialias:true,alpha:true});this.thumbRenderer.setSize(160,100);this.thumbRenderer.setPixelRatio(1);}
   const scene=new T.Scene();scene.add(new T.HemisphereLight(0xffffff,0x667777,3));const light=new T.DirectionalLight(0xffffff,3);light.position.set(-60,100,100);scene.add(light);
-  const e=element(key,[0,0,0],32,20);if(e.kind==='pipe')e.geometry.length=130;
+  const e=element(key,[0,0,0],(COPPER_PARTS[key]||PRESS_PARTS[key]||STEEL_PARTS[key])?22:32,(COPPER_PARTS[key]||PRESS_PARTS[key]||STEEL_PARTS[key])?18:20);if(e.kind==='pipe')e.geometry.length=130;
   const mesh=catalogMesh(e);scene.add(mesh);const bounds=new T.Box3().setFromObject(mesh),center=bounds.getCenter(new T.Vector3()),size=bounds.getSize(new T.Vector3()).length();
   const camera=new T.PerspectiveCamera(34,1.6,.1,10000);camera.position.copy(center).add(new T.Vector3(-1,.8,1.5).normalize().multiplyScalar(size*2));camera.lookAt(center);this.thumbRenderer.render(scene,camera);const url=this.thumbRenderer.domElement.toDataURL('image/png');dispose(mesh);return url;
  }
@@ -106,7 +112,7 @@ export class HydroView{
   const points=endpoints(e);const obstacle=p=>{p.clearance=e.technical.outerDiameter*.85;this.labelObstacles.push(p);};points.forEach(p=>obstacle(V(p)));for(let i=1;i<points.length;i++)for(let t=1;t<24;t++)obstacle(V(points[0]).lerp(V(points[i]),t/24));
   if(e.id!==selected)return;this.enclose(mesh);
   points.forEach((p,port)=>{const node=document.createElement('button');node.className='port-label';const used=(project.connections??[]).some(c=>[c.a,c.b].some(r=>r.id===e.id&&r.port===port));node.textContent=portName(port)+(used?' ●':' ＋');node.disabled=used;node.title=used?'Koniec połączony':'Dołącz część do króćca';node.onclick=()=>this.cb.port?.(e.id,port);this.addCallout(node,V(p),port===0?-1:1);});
-  if(this.settings.dimensions){const node=document.createElement('div');node.className='dimension';node.textContent=e.technical.family==='brass'?`${e.name} · ${e.technical.threadSize}″${e.kind==='reducer'?' / '+e.technical.outletThreadSize+'″':''}`:e.kind==='pipe'?`${e.technical.family==='pex'?'PEX':'PP-R'} Ø ${e.technical.outerDiameter} · ${e.geometry.length} mm`:`${e.name} · ${e.technical.outerDiameter}${e.kind==='reducer'?' / '+e.technical.outletDiameter:''} mm`;
+  if(this.settings.dimensions){const node=document.createElement('div');node.className='dimension';node.textContent=e.technical.family==='brass'?`${e.name} · ${e.technical.threadSize}″${e.kind==='reducer'?' / '+e.technical.outletThreadSize+'″':''}`:e.kind==='pipe'?`${e.technical.family==='steel'?'Stal press':e.technical.family==='press'?'Cu press':e.technical.family==='copper'?'Cu':e.technical.family==='pex'?'PEX':'PP-R'} Ø ${e.technical.outerDiameter} · ${e.geometry.length} mm`:`${e.name} · ${e.technical.outerDiameter}${e.kind==='reducer'?' / '+e.technical.outletDiameter:''} mm`;
    this.addCallout(node,box.getCenter(new T.Vector3()),0);}
  }
  // Callouts live in screen space: keep text clear of projected parts while orbiting.

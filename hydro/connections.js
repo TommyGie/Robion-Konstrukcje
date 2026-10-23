@@ -1,3 +1,6 @@
+import {STEEL_PARTS,STEEL_SIZES,steelData,steelPorts,steelOutlets,steelThreads} from './steel.js';
+import {PRESS_PARTS,PRESS_SIZES,pressData,pressPorts,pressOutlets,pressThreads} from './press.js';
+import {COPPER_PARTS,COPPER_SIZES,copperData,copperPorts,copperOutlets,copperThreads} from './copper.js';
 import {retailAllowed} from './retail.js';
 import {PEX_PARTS,PEX_SIZES,pexThreads,pexOutlets,pexMarketThreads,pexMarketOutlets,pexMarketAvailable} from './pex.js';
 import {BRASS_PARTS,brassOutlets} from './brass.js';
@@ -9,7 +12,10 @@ export function occupied(p,id,port){return (p.connections??[]).some(c=>[c.a,c.b]
 export function attachment(p,id,port,kind,turn=0,length=1000,threadSize,outletThread){
  const source=p.elements.find(e=>e.id===id);if(!source)throw Error('Wybierz element.');if(occupied(p,id,port))throw Error('Ten koniec jest już połączony.');
  const sourcePort=ports(source)[port];let next;
- if(PEX_PARTS[kind]){const d=sourcePort.threadSize?PEX_SIZES.find(n=>pexMarketThreads(kind,n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia PEX.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:pexMarketOutlets(d).at(-1),sourcePort.threadSize??threadSize??pexMarketThreads(kind,d)[0]);if(!pexMarketAvailable(kind,d,next.technical.outletDiameter,next.technical.threadSize))throw Error('Wybierz inny rozmiar części.');if(next.kind==='pipe')next.geometry.length=length;}
+ if(STEEL_PARTS[kind]){const d=sourcePort.threadSize?STEEL_SIZES.find(n=>STEEL_PARTS[kind].thread&&steelThreads(n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia Cu.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:steelOutlets(d).at(-1),sourcePort.threadSize??threadSize);if(next.kind==='pipe')next.geometry.length=length;}
+ else if(PRESS_PARTS[kind]){const d=sourcePort.threadSize?PRESS_SIZES.find(n=>PRESS_PARTS[kind].thread&&pressThreads(n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia Cu.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:pressOutlets(d).at(-1),sourcePort.threadSize??threadSize);if(next.kind==='pipe')next.geometry.length=length;}
+ else if(COPPER_PARTS[kind]){const d=sourcePort.threadSize?COPPER_SIZES.find(n=>COPPER_PARTS[kind].thread&&copperThreads(n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia Cu.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:copperOutlets(d).at(-1),sourcePort.threadSize??threadSize);if(next.kind==='pipe')next.geometry.length=length;}
+ else if(PEX_PARTS[kind]){const d=sourcePort.threadSize?PEX_SIZES.find(n=>pexMarketThreads(kind,n).includes(sourcePort.threadSize)):sourcePort.diameter;if(!d)throw Error('Brak zgodnego przejścia PEX.');next=element(kind,[0,0,0],d,typeof outletThread==='number'?outletThread:pexMarketOutlets(d).at(-1),sourcePort.threadSize??threadSize??pexMarketThreads(kind,d)[0]);if(!pexMarketAvailable(kind,d,next.technical.outletDiameter,next.technical.threadSize))throw Error('Wybierz inny rozmiar części.');if(next.kind==='pipe')next.geometry.length=length;}
  else if(BRASS_PARTS[kind]){if(!sourcePort.threadSize)throw Error('Mosiądz wymaga przyłącza gwintowanego.');next=element(kind,[0,0,0],sourcePort.threadSize,outletThread??brassOutlets(sourcePort.threadSize).at(-1));}
  else {let d=sourcePort.type.startsWith('thread')?source.technical.outerDiameter:sourcePort.diameter;
  if(sourcePort.threadSize&&PPR_PARTS[kind])d=PPR_SIZES.find(size=>threadSizes(kind,size).includes(sourcePort.threadSize)&&retailAllowed(kind,size,sourcePort.threadSize));
@@ -55,7 +61,7 @@ export function joinProblem(p,a,b){
  if(occupied(p,a.id,a.port)||occupied(p,b.id,b.port))return 'Wybrany koniec jest już połączony.';
  if(connectedIds(p,a.id).has(b.id))return 'Te elementy należą już do jednego układu. Zamykanie pętli nie jest jeszcze obsługiwane.';
  const problem=portCompatibility(x,a.port,y,b.port);if(problem)return problem;
- if(x.technical.family!=='pex'&&!ports(x)[a.port].type.startsWith('thread')&&(x.technical.material!==y.technical.material||x.technical.connection!==y.technical.connection))return 'Końce mają różne materiały lub technologie przyłączenia.';
+ if(!['pex','copper','press'].includes(x.technical.family)&&!ports(x)[a.port].type.startsWith('thread')&&(x.technical.material!==y.technical.material||x.technical.connection!==y.technical.connection))return 'Końce mają różne materiały lub technologie przyłączenia.';
  if(Math.hypot(...portDirection(x,a.port).map((n,i)=>n+portDirection(y,b.port)[i]))>1e-4)return 'Końce nie są skierowane przeciwnie. Obróć element przed połączeniem.';
  return null;
 }
